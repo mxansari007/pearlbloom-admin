@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* Global defaults that play nicely with Tailwind + full-page app */
+
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Let us control colors with Tailwind classes, not OS color-scheme switching */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Reset the body – NO centering, let our layout handle everything */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #020617; /* tailwind's slate-950-ish */
+  color: #e5e7eb; /* tailwind's gray-200-ish */
+}
+
+/* Let Tailwind handle most link & button styles.
+   Keep only very minimal defaults if you want. */
+
+a {
+  text-decoration: none;
+}
+
+/* Remove the Vite demo h1 / button styling so our components look as designed */
+h1,
+button {
+  font: inherit;
+}
