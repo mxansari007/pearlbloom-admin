@@ -1,7 +1,8 @@
 // src/layouts/AdminLayout.tsx
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { auth, signOut } from "../firebase";
+import { auth, signOut, db } from "../firebase";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 
 type AdminLayoutProps = {
   title?: string;
@@ -15,6 +16,7 @@ const navItems = [
   { to: "/products", label: "Products" },
   { to: "/collections", label: "Collections" },
   { to: "/homepage", label: "Homepage" },
+  { to: "/chats", label: "Chats", notify: true }, // 🔥 NEW
   { to: "/settings", label: "Settings" },
 ];
 
@@ -28,6 +30,24 @@ export default function AdminLayout({
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // 🔔 unread chat count
+  const [unreadChats, setUnreadChats] = useState(0);
+
+  /* ---------------- Realtime chat notifications ---------------- */
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "chats"),
+      where("lastSender", "==", "user")
+    );
+
+    return onSnapshot(q, (snap) => {
+      setUnreadChats(snap.size);
+    });
+  }, []);
+
+  /* ---------------- Logout ---------------- */
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -38,7 +58,7 @@ export default function AdminLayout({
   };
 
   const handleNavClick = () => {
-    setMobileOpen(false); // close menu after navigating
+    setMobileOpen(false);
   };
 
   return (
@@ -58,7 +78,7 @@ export default function AdminLayout({
             </div>
           </Link>
 
-          {/* Desktop nav + logout */}
+          {/* Desktop nav */}
           <div className="hidden sm:flex items-center gap-3">
             <nav className="flex gap-2 text-xs text-neutral-300">
               {navItems.map((item) => (
@@ -67,7 +87,15 @@ export default function AdminLayout({
                   to={item.to}
                   active={isActive(location.pathname, item.to)}
                 >
-                  {item.label}
+                  <span className="flex items-center gap-2">
+                    {item.label}
+
+                    {item.notify && unreadChats > 0 && (
+                      <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
+                        {unreadChats}
+                      </span>
+                    )}
+                  </span>
                 </AdminNavLink>
               ))}
             </nav>
@@ -80,7 +108,7 @@ export default function AdminLayout({
             </button>
           </div>
 
-          {/* Mobile: hamburger + logout icon */}
+          {/* Mobile actions */}
           <div className="sm:hidden flex items-center gap-2">
             <button
               onClick={handleLogout}
@@ -88,32 +116,32 @@ export default function AdminLayout({
             >
               Log out
             </button>
-      <button
-  onClick={() => setMobileOpen((v) => !v)}
-  className="flex flex-col justify-center items-center gap-[4px] p-2 border border-neutral-700 rounded-lg hover:border-yellow-400 hover:bg-neutral-900 transition"
-  aria-label="Toggle navigation"
->
-  <span
-    className={`h-[2px] w-5 bg-neutral-200 transition-transform ${
-      mobileOpen ? "rotate-45 translate-y-[6px]" : ""
-    }`}
-  />
-  <span
-    className={`h-[2px] w-5 bg-neutral-200 transition-opacity ${
-      mobileOpen ? "opacity-0" : "opacity-100"
-    }`}
-  />
-  <span
-    className={`h-[2px] w-5 bg-neutral-200 transition-transform ${
-      mobileOpen ? "-rotate-45 -translate-y-[6px]" : ""
-    }`}
-  />
-</button>
 
+            <button
+              onClick={() => setMobileOpen((v) => !v)}
+              className="flex flex-col justify-center items-center gap-[4px] p-2 border border-neutral-700 rounded-lg hover:border-yellow-400 hover:bg-neutral-900 transition"
+              aria-label="Toggle navigation"
+            >
+              <span
+                className={`h-[2px] w-5 bg-neutral-200 transition-transform ${
+                  mobileOpen ? "rotate-45 translate-y-[6px]" : ""
+                }`}
+              />
+              <span
+                className={`h-[2px] w-5 bg-neutral-200 transition-opacity ${
+                  mobileOpen ? "opacity-0" : "opacity-100"
+                }`}
+              />
+              <span
+                className={`h-[2px] w-5 bg-neutral-200 transition-transform ${
+                  mobileOpen ? "-rotate-45 -translate-y-[6px]" : ""
+                }`}
+              />
+            </button>
           </div>
         </div>
 
-        {/* Mobile dropdown menu */}
+        {/* Mobile menu */}
         {mobileOpen && (
           <div className="sm:hidden border-t border-neutral-800 bg-neutral-950/98">
             <nav className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2 text-xs">
@@ -122,13 +150,19 @@ export default function AdminLayout({
                   key={item.to}
                   to={item.to}
                   onClick={handleNavClick}
-                  className={`px-3 py-2 rounded-lg ${
+                  className={`px-3 py-2 rounded-lg flex justify-between items-center ${
                     isActive(location.pathname, item.to)
                       ? "bg-neutral-800 text-yellow-200 border border-yellow-500/60"
                       : "text-neutral-300 border border-transparent hover:bg-neutral-900 hover:text-yellow-100"
                   }`}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+
+                  {item.notify && unreadChats > 0 && (
+                    <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
+                      {unreadChats}
+                    </span>
+                  )}
                 </Link>
               ))}
             </nav>
@@ -161,6 +195,8 @@ export default function AdminLayout({
     </div>
   );
 }
+
+/* ---------------- Helpers ---------------- */
 
 function AdminNavLink({
   to,

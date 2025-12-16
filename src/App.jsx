@@ -10,6 +10,9 @@ import CollectionsPage from "./pages/CollectionsPage";
 import HomepagePage from "./pages/HomepagePage";
 import SettingsPage from "./pages/SettingsPage";
 
+import ChatsPage from "./pages/ChatsPage";
+import ChatDetailPage from "./pages/ChatDetailPage";
+
 export default function App() {
   return (
     <AuthProvider>
@@ -62,6 +65,17 @@ export default function App() {
               <SettingsPage />
             </ProtectedRoute>
           }
+        />
+
+        <Route path="/chats" element={
+          <ProtectedRoute>
+            <ChatsPage />
+          </ProtectedRoute>}
+        />
+        <Route path="/chats/:chatId" element={
+          <ProtectedRoute>
+            <ChatDetailPage />
+          </ProtectedRoute>}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />
