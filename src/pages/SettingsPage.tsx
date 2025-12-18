@@ -1,4 +1,3 @@
-// src/pages/SettingsPage.tsx
 import { useEffect, useState } from "react";
 import {
   db,
@@ -15,6 +14,11 @@ import AdminLayout from "../layouts/AdminLayout";
 type FooterLink = {
   label: string;
   href: string;
+};
+
+type SocialLink = {
+  platform: "instagram" | "facebook" | "twitter" | "youtube" | "linkedin";
+  url: string;
 };
 
 type HeroImage = {
@@ -38,6 +42,7 @@ type SettingsForm = {
   contactEmail: string;
   contactPhone: string;
   footerLinks: FooterLink[];
+  socialLinks: SocialLink[];
 };
 
 /* ---------------- Defaults ---------------- */
@@ -56,6 +61,7 @@ const emptySettings: SettingsForm = {
   contactEmail: "",
   contactPhone: "",
   footerLinks: [{ label: "Collections", href: "/collections" }],
+  socialLinks: [],
 };
 
 export default function SettingsPage() {
@@ -90,6 +96,7 @@ export default function SettingsPage() {
           contactEmail: data.footer?.contactEmail ?? "",
           contactPhone: data.footer?.contactPhone ?? "",
           footerLinks: data.footer?.links ?? [],
+          socialLinks: data.footer?.socialLinks ?? [],
         });
       }
       setLoading(false);
@@ -113,42 +120,42 @@ export default function SettingsPage() {
     });
 
   /* ---------------- Hero upload (Callable) ---------------- */
-const handleHeroImageUpload = async (
-  e: React.ChangeEvent<HTMLInputElement>
-) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
 
-  setUploadingHero(true);
+  const handleHeroImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  try {
-    const base64 = await fileToBase64(file);
+    setUploadingHero(true);
 
-    // delete old image if exists
-    if (form.heroImage?.public_id) {
-      await deleteImage({ public_id: form.heroImage.public_id });
+    try {
+      const base64 = await fileToBase64(file);
+
+      if (form.heroImage?.public_id) {
+        await deleteImage({ public_id: form.heroImage.public_id });
+      }
+
+      const res: any = await uploadImage({
+        base64,
+        filename: file.name,
+        folder: "hero",
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        heroImage: {
+          url: res.data.url,
+          public_id: res.data.public_id,
+        },
+      }));
+    } catch (err) {
+      console.error(err);
+      alert("Hero image upload failed");
+    } finally {
+      setUploadingHero(false);
     }
-
-    const res: any = await uploadImage({
-      base64,
-      filename: file.name,
-      folder: "hero",
-    });
-
-    setForm((prev) => ({
-      ...prev,
-      heroImage: {
-        url: res.data.url,
-        public_id: res.data.public_id,
-      },
-    }));
-  } catch (err) {
-    console.error(err);
-    alert("Hero image upload failed");
-  } finally {
-    setUploadingHero(false);
-  }
-};
+  };
 
   /* ---------------- Footer links helpers ---------------- */
 
@@ -179,6 +186,38 @@ const handleHeroImageUpload = async (
     }));
   };
 
+  /* ---------------- Social links helpers ---------------- */
+
+  const addSocialLink = () => {
+    setForm((prev) => ({
+      ...prev,
+      socialLinks: [
+        ...prev.socialLinks,
+        { platform: "instagram", url: "" },
+      ],
+    }));
+  };
+
+  const updateSocialLink = (
+    index: number,
+    field: "platform" | "url",
+    value: string
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      socialLinks: prev.socialLinks.map((l, i) =>
+        i === index ? { ...l, [field]: value } : l
+      ),
+    }));
+  };
+
+  const removeSocialLink = (index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      socialLinks: prev.socialLinks.filter((_, i) => i !== index),
+    }));
+  };
+
   /* ---------------- Save ---------------- */
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -204,6 +243,7 @@ const handleHeroImageUpload = async (
           contactEmail: form.contactEmail,
           contactPhone: form.contactPhone,
           links: form.footerLinks,
+          socialLinks: form.socialLinks,
         },
 
         updatedAt: serverTimestamp(),
@@ -384,6 +424,54 @@ const handleHeroImageUpload = async (
               className="text-xs px-3 py-1 rounded-lg bg-neutral-800"
             >
               + Add link
+            </button>
+          </div>
+
+          {/* Social media */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium">Social media</p>
+
+            {form.socialLinks.map((social, i) => (
+              <div key={i} className="flex gap-2">
+                <select
+                  className="rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-2 text-sm"
+                  value={social.platform}
+                  onChange={(e) =>
+                    updateSocialLink(i, "platform", e.target.value)
+                  }
+                >
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="twitter">Twitter / X</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="linkedin">LinkedIn</option>
+                </select>
+
+                <input
+                  placeholder="https://instagram.com/pearlbloom"
+                  className="flex-1 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+                  value={social.url}
+                  onChange={(e) =>
+                    updateSocialLink(i, "url", e.target.value)
+                  }
+                />
+
+                <button
+                  type="button"
+                  onClick={() => removeSocialLink(i)}
+                  className="px-3 rounded-lg bg-red-600/70 text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addSocialLink}
+              className="text-xs px-3 py-1 rounded-lg bg-neutral-800"
+            >
+              + Add social link
             </button>
           </div>
         </section>

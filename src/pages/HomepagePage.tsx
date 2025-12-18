@@ -5,6 +5,7 @@ import {
   getDocs,
   addDoc,
   deleteDoc,
+  updateDoc,
   doc,
 } from "../firebase";
 import AdminLayout from "../layouts/AdminLayout";
@@ -44,13 +45,14 @@ export default function HomepagePage() {
   const [sections, setSections] = useState<Section[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [collections, setCollections] = useState<CollectionOption[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
 
-  /* ---------------- Fetch homepage sections ---------------- */
+  /* ---------------- Fetch sections ---------------- */
 
   useEffect(() => {
     (async () => {
@@ -86,11 +88,28 @@ export default function HomepagePage() {
     })();
   }, []);
 
-  /* ---------------- Handlers ---------------- */
+  /* ---------------- Helpers ---------------- */
 
   const handleChange = (field: keyof typeof form, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  const startEdit = (section: Section) => {
+    setEditingId(section.id);
+    setForm({
+      title: section.title,
+      type: section.type,
+      order: section.order,
+      configJson: section.config
+        ? JSON.stringify(section.config, null, 2)
+        : "",
+    });
+
+    setSelectedProductIds(section.productIds || []);
+    setSelectedCollectionIds(section.collectionIds || []);
+  };
+
+  /* ---------------- Submit ---------------- */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,38 +120,38 @@ export default function HomepagePage() {
       try {
         configParsed = JSON.parse(form.configJson);
       } catch {
-        alert("Config JSON is invalid.");
+        alert("Invalid config JSON");
         setSaving(false);
         return;
       }
     }
 
-    const productIds = selectedProductIds;
-    const collectionIds = selectedCollectionIds;
-
-    const docRef = await addDoc(collection(db, "homepageSections"), {
+    const payload = {
       page: "home",
       title: form.title,
       type: form.type,
       order: Number(form.order),
-      productIds,
-      collectionIds,
+      productIds: selectedProductIds,
+      collectionIds: selectedCollectionIds,
       config: configParsed,
-    });
+    };
 
-    setSections((prev) => [
-      ...prev,
-      {
-        id: docRef.id,
-        title: form.title,
-        type: form.type,
-        order: Number(form.order),
-        productIds,
-        collectionIds,
-        config: configParsed,
-      },
-    ]);
+    if (editingId) {
+      await updateDoc(doc(db, "homepageSections", editingId), payload);
+      setSections((prev) =>
+        prev.map((s) =>
+          s.id === editingId ? { ...s, ...payload } : s
+        )
+      );
+    } else {
+      const ref = await addDoc(
+        collection(db, "homepageSections"),
+        payload
+      );
+      setSections((prev) => [...prev, { id: ref.id, ...payload }]);
+    }
 
+    setEditingId(null);
     setForm(emptyForm);
     setSelectedProductIds([]);
     setSelectedCollectionIds([]);
@@ -150,18 +169,13 @@ export default function HomepagePage() {
   return (
     <AdminLayout
       title="Homepage layout"
-      subtitle="Control sections like hero, featured pieces and collections rows."
+      subtitle="Add, edit, and control homepage sections."
     >
-      {/* Form */}
+      {/* FORM */}
       <form
         onSubmit={handleSubmit}
         className="mb-8 rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4"
       >
-        <p className="text-sm text-neutral-400 mb-2">
-          These sections are rendered in order on the homepage. Your public site
-          should read from this collection to build rows.
-        </p>
-
         <div className="grid gap-4 md:grid-cols-3">
           <div className="md:col-span-2">
             <label className="text-sm">Section title</label>
@@ -194,18 +208,17 @@ export default function HomepagePage() {
               handleChange("type", e.target.value as any)
             }
           >
-            <option value="featuredProducts">Featured products row</option>
+            <option value="featuredProducts">Featured products</option>
             <option value="collectionsRow">Collections row</option>
-            <option value="banner">Banner / text block</option>
+            <option value="banner">Banner / text</option>
           </select>
         </div>
 
-        {/* Product selector */}
         <div>
-          <label className="text-sm">Select products (optional)</label>
+          <label className="text-sm">Products</label>
           <select
             multiple
-            className="mt-1 w-full h-40 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            className="mt-1 w-full h-36 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
             value={selectedProductIds}
             onChange={(e) =>
               setSelectedProductIds(
@@ -219,14 +232,10 @@ export default function HomepagePage() {
               </option>
             ))}
           </select>
-          <p className="text-xs text-neutral-500 mt-1">
-            Hold Ctrl / Cmd to select multiple products
-          </p>
         </div>
 
-        {/* Collection selector */}
         <div>
-          <label className="text-sm">Select collections (optional)</label>
+          <label className="text-sm">Collections</label>
           <select
             multiple
             className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
@@ -246,9 +255,7 @@ export default function HomepagePage() {
         </div>
 
         <div>
-          <label className="text-sm">
-            Config JSON (optional – layout tweaks per section)
-          </label>
+          <label className="text-sm">Config JSON</label>
           <textarea
             className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs font-mono"
             rows={5}
@@ -257,15 +264,36 @@ export default function HomepagePage() {
           />
         </div>
 
-        <button
-          disabled={saving}
-          className="mt-2 rounded-lg bg-yellow-500 text-black px-4 py-2 text-sm font-medium disabled:opacity-50"
-        >
-          {saving ? "Adding…" : "Add section"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            disabled={saving}
+            className="rounded-lg bg-yellow-500 text-black px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {saving
+              ? "Saving…"
+              : editingId
+              ? "Update section"
+              : "Add section"}
+          </button>
+
+          {editingId && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingId(null);
+                setForm(emptyForm);
+                setSelectedProductIds([]);
+                setSelectedCollectionIds([]);
+              }}
+              className="text-sm text-neutral-400 underline"
+            >
+              Cancel edit
+            </button>
+          )}
+        </div>
       </form>
 
-      {/* List */}
+      {/* LIST */}
       <div className="space-y-3">
         {sections.map((s) => (
           <div
@@ -279,31 +307,23 @@ export default function HomepagePage() {
               <p className="text-xs text-neutral-400 mt-1">
                 Type: {s.type}
               </p>
-              {s.productIds?.length > 0 && (
-                <p className="text-xs text-neutral-400 mt-1">
-                  Products: {s.productIds.join(", ")}
-                </p>
-              )}
-              {s.collectionIds?.length > 0 && (
-                <p className="text-xs text-neutral-400 mt-1">
-                  Collections: {s.collectionIds.join(", ")}
-                </p>
-              )}
             </div>
-            <button
-              onClick={() => handleDelete(s.id)}
-              className="text-xs px-3 py-1 rounded-full bg-red-600/80"
-            >
-              Delete
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => startEdit(s)}
+                className="text-xs px-3 py-1 rounded-full bg-blue-600/80"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => handleDelete(s.id)}
+                className="text-xs px-3 py-1 rounded-full bg-red-600/80"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         ))}
-
-        {sections.length === 0 && (
-          <p className="text-sm text-neutral-400">
-            No sections yet. Add your first homepage section above.
-          </p>
-        )}
       </div>
     </AdminLayout>
   );
