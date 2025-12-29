@@ -16,26 +16,24 @@ import { getUploadCallable, getDeleteCallable } from "../lib/functions";
 import type { HttpsCallable } from "firebase/functions";
 
 type VariantAttribute = {
-  key: string;    // e.g. "Size", "Color", "Weight"
-  value: string;  // e.g. "7", "Red", "4.2g"
+  key: string;
+  value: string;
 };
-
-
 
 type Variant = {
   id: string;
-  attributes: VariantAttribute[]; // 🔑 THIS is the core
-  price?: number;                 // overrides base price
+  attributes: VariantAttribute[];
+  price?: number;
   stock: number;
   discountPercent?: number;
+  images?: string[]; // 🔑 NEW: Images for this variant
 };
 
 type Inventory = {
   trackStock: boolean;
-  stock?: number;            // used only when no variants
-  discountPercent?: number;  // used only when no variants
+  stock?: number;
+  discountPercent?: number;
 };
-
 
 type Attribute = {
   key: string;
@@ -56,7 +54,7 @@ type ProductForm = {
   currency: string;
   shortDescription: string;
   description: string;
-  attributes: Attribute[]; // dynamic specs: Metal, Gemstone, SKU, etc.
+  attributes: Attribute[];
   categories: string[];
   collectionId: string;
   isFeatured: boolean;
@@ -72,7 +70,6 @@ type CollectionOption = {
   name: string;
 };
 
-
 const emptyForm: ProductForm = {
   name: "",
   slug: "",
@@ -81,7 +78,7 @@ const emptyForm: ProductForm = {
   currency: "INR",
   shortDescription: "",
   description: "",
-  attributes: [],            // product-level attributes
+  attributes: [],
   categories: [],
   collectionId: "",
   isFeatured: false,
@@ -92,18 +89,13 @@ const emptyForm: ProductForm = {
     flipkart: "",
     meesho: "",
   },
-
-  /* Website-only inventory (no variants case) */
   inventory: {
     trackStock: false,
     stock: 0,
     discountPercent: 0,
   },
-
-  /* Variants (each variant has its own attributes) */
   variants: [],
 };
-
 
 function slugify(value: string) {
   return value
@@ -120,26 +112,28 @@ export default function ProductEditPage() {
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-const [collections, setCollections] = useState<CollectionOption[]>([]);
+  const [collections, setCollections] = useState<CollectionOption[]>([]);
 
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const [uploadingGalleryMap, setUploadingGalleryMap] = useState<Record<string, boolean>>({});
   const [imagesMeta, setImagesMeta] = useState<Record<string, string>>({});
 
+  // 🔑 NEW: Track which variant's image selector is open
+  const [variantImageSelectorOpen, setVariantImageSelectorOpen] = useState<number | null>(null);
+
   const isNew = id === "new";
 
   useEffect(() => {
-  (async () => {
-    const snap = await getDocs(collection(db, "collections"));
-    const list = snap.docs.map((d) => ({
-      id: d.id,
-      name: d.data().name,
-    }));
-    setCollections(list);
-  })();
-}, []);
+    (async () => {
+      const snap = await getDocs(collection(db, "collections"));
+      const list = snap.docs.map((d) => ({
+        id: d.id,
+        name: d.data().name,
+      }));
+      setCollections(list);
+    })();
+  }, []);
 
-  // create callable handlers (deployed or emulator per src/lib/functions.ts)
   const callUploadImage = useMemo(() => {
     try {
       return getUploadCallable();
@@ -158,89 +152,83 @@ const [collections, setCollections] = useState<CollectionOption[]>([]);
     }
   }, []) as HttpsCallable | undefined;
 
-// Load existing product (if editing)
-useEffect(() => {
-  if (!isNew && id) {
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, "products", id));
-        if (!snap.exists()) return;
+  // Load existing product
+  useEffect(() => {
+    if (!isNew && id) {
+      (async () => {
+        try {
+          const snap = await getDoc(doc(db, "products", id));
+          if (!snap.exists()) return;
 
-        const data = snap.data() as any;
+          const data = snap.data() as any;
 
-        /* ---------- PRODUCT ATTRIBUTES (existing logic preserved) ---------- */
-        const attrs: Attribute[] = Array.isArray(data.attributes)
-          ? [...data.attributes]
-          : [];
+          const attrs: Attribute[] = Array.isArray(data.attributes)
+            ? [...data.attributes]
+            : [];
 
-        const addIfNotExists = (key: string, value?: string) => {
-          if (!value) return;
-          const exists = attrs.some(
-            (a) => a.key.toLowerCase() === key.toLowerCase()
-          );
-          if (!exists) attrs.push({ key, value });
-        };
+          const addIfNotExists = (key: string, value?: string) => {
+            if (!value) return;
+            const exists = attrs.some(
+              (a) => a.key.toLowerCase() === key.toLowerCase()
+            );
+            if (!exists) attrs.push({ key, value });
+          };
 
-        addIfNotExists("Metal", data.metal);
-        addIfNotExists("Gemstone", data.gemstone);
-        addIfNotExists("SKU", data.sku);
+          addIfNotExists("Metal", data.metal);
+          addIfNotExists("Gemstone", data.gemstone);
+          addIfNotExists("SKU", data.sku);
 
-        /* ---------- INVENTORY (NORMALIZED) ---------- */
-        const inventory = {
-          trackStock: Boolean(data.inventory?.trackStock),
-          stock: data.inventory?.stock ?? 0,
-          discountPercent: data.inventory?.discountPercent ?? 0,
-        };
+          const inventory = {
+            trackStock: Boolean(data.inventory?.trackStock),
+            stock: data.inventory?.stock ?? 0,
+            discountPercent: data.inventory?.discountPercent ?? 0,
+          };
 
-        /* ---------- VARIANTS (NORMALIZED, ATTRIBUTE-DRIVEN) ---------- */
-        const variants = Array.isArray(data.variants)
-          ? data.variants.map((v: any) => ({
-              id: v.id ?? crypto.randomUUID(),
-              attributes: Array.isArray(v.attributes) ? v.attributes : [],
-              price:
-                typeof v.price === "number"
-                  ? v.price
-                  : data.price ?? 0,
-              stock: v.stock ?? 0,
-              discountPercent: v.discountPercent ?? 0,
-            }))
-          : [];
+          // 🔑 Load variant images
+          const variants = Array.isArray(data.variants)
+            ? data.variants.map((v: any) => ({
+                id: v.id ?? crypto.randomUUID(),
+                attributes: Array.isArray(v.attributes) ? v.attributes : [],
+                price: typeof v.price === "number" ? v.price : data.price ?? 0,
+                stock: v.stock ?? 0,
+                discountPercent: v.discountPercent ?? 0,
+                images: Array.isArray(v.images) ? v.images : [], // 🔑 NEW
+              }))
+            : [];
 
-        /* ---------- SET FORM (NO FIELD REMOVED) ---------- */
-        setForm({
-          name: data.name ?? "",
-          slug: data.slug ?? "",
-          brand: data.brand ?? "",
-          price: data.price ?? 0,
-          currency: data.currency ?? "INR",
-          shortDescription: data.shortDescription ?? "",
-          description: data.description ?? data.fullDescription ?? "",
-          attributes: attrs,
-          categories: Array.isArray(data.categories) ? data.categories : [],
-          collectionId: data.collectionId ?? "",
-          isFeatured: data.isFeatured ?? false,
-          thumbnailUrl: data.thumbnailUrl ?? "",
-          images: Array.isArray(data.images) ? data.images : [],
-          marketplaces: {
-            amazon: data.marketplaces?.amazon ?? "",
-            flipkart: data.marketplaces?.flipkart ?? "",
-            meesho: data.marketplaces?.meesho ?? "",
-          },
-          inventory,
-          variants,
-        });
+          setForm({
+            name: data.name ?? "",
+            slug: data.slug ?? "",
+            brand: data.brand ?? "",
+            price: data.price ?? 0,
+            currency: data.currency ?? "INR",
+            shortDescription: data.shortDescription ?? "",
+            description: data.description ?? data.fullDescription ?? "",
+            attributes: attrs,
+            categories: Array.isArray(data.categories) ? data.categories : [],
+            collectionId: data.collectionId ?? "",
+            isFeatured: data.isFeatured ?? false,
+            thumbnailUrl: data.thumbnailUrl ?? "",
+            images: Array.isArray(data.images) ? data.images : [],
+            marketplaces: {
+              amazon: data.marketplaces?.amazon ?? "",
+              flipkart: data.marketplaces?.flipkart ?? "",
+              meesho: data.marketplaces?.meesho ?? "",
+            },
+            inventory,
+            variants,
+          });
 
-        if (data.imagesMeta && typeof data.imagesMeta === "object") {
-          setImagesMeta(data.imagesMeta);
+          if (data.imagesMeta && typeof data.imagesMeta === "object") {
+            setImagesMeta(data.imagesMeta);
+          }
+        } catch (err: any) {
+          console.error(err);
+          setError(err.message || "Failed to load product.");
         }
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || "Failed to load product.");
-      }
-    })();
-  }
-}, [id, isNew]);
-
+      })();
+    }
+  }, [id, isNew]);
 
   const handleChange = (field: keyof ProductForm, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -407,157 +395,160 @@ useEffect(() => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setSaving(true);
-  setError(null);
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
 
-  try {
-    const idToUse = isNew ? crypto.randomUUID() : id!;
-    const productRef = doc(db, "products", idToUse);
+    try {
+      const idToUse = isNew ? crypto.randomUUID() : id!;
+      const productRef = doc(db, "products", idToUse);
 
-    const slugToSave = form.slug || slugify(form.name);
+      const slugToSave = form.slug || slugify(form.name);
 
-    /* ---------- NORMALIZE INVENTORY ---------- */
-    const inventoryToSave = {
-      trackStock: Boolean(form.inventory?.trackStock),
-      stock: form.inventory?.stock ?? 0,
-      discountPercent: form.inventory?.discountPercent ?? 0,
-    };
+      const inventoryToSave = {
+        trackStock: Boolean(form.inventory?.trackStock),
+        stock: form.inventory?.stock ?? 0,
+        discountPercent: form.inventory?.discountPercent ?? 0,
+      };
 
-    /* ---------- NORMALIZE VARIANTS ---------- */
-    const variantsToSave = Array.isArray(form.variants)
-      ? form.variants.map((v) => ({
-          id: v.id ?? crypto.randomUUID(),
+      // 🔑 Save variant images
+      const variantsToSave = Array.isArray(form.variants)
+        ? form.variants.map((v) => ({
+            id: v.id ?? crypto.randomUUID(),
+            attributes: Array.isArray(v.attributes) ? v.attributes : [],
+            price: typeof v.price === "number" ? v.price : Number(form.price),
+            stock: v.stock ?? 0,
+            discountPercent: v.discountPercent ?? 0,
+            images: Array.isArray(v.images) ? v.images : [], // 🔑 NEW
+          }))
+        : [];
 
-          // 🔑 attribute-driven variant
-          attributes: Array.isArray(v.attributes) ? v.attributes : [],
-
-          // fallback to base price if not overridden
-          price:
-            typeof v.price === "number"
-              ? v.price
-              : Number(form.price),
-
-          stock: v.stock ?? 0,
-          discountPercent: v.discountPercent ?? 0,
-        }))
-      : [];
-
-    await setDoc(
-      productRef,
-      {
-        name: form.name,
-        slug: slugToSave,
-        brand: form.brand,
-        price: Number(form.price),
-        currency: form.currency,
-        shortDescription: form.shortDescription,
-        description: form.description,
-        attributes: form.attributes,
-        categories: form.categories,
-        collectionId: form.collectionId,
-        isFeatured: form.isFeatured,
-        thumbnailUrl: form.thumbnailUrl,
-        images: form.images ?? [],
-        imagesMeta: imagesMeta,
-        marketplaces: {
-          amazon: form.marketplaces.amazon,
-          flipkart: form.marketplaces.flipkart,
-          meesho: form.marketplaces.meesho,
+      await setDoc(
+        productRef,
+        {
+          name: form.name,
+          slug: slugToSave,
+          brand: form.brand,
+          price: Number(form.price),
+          currency: form.currency,
+          shortDescription: form.shortDescription,
+          description: form.description,
+          attributes: form.attributes,
+          categories: form.categories,
+          collectionId: form.collectionId,
+          isFeatured: form.isFeatured,
+          thumbnailUrl: form.thumbnailUrl,
+          images: form.images ?? [],
+          imagesMeta: imagesMeta,
+          marketplaces: {
+            amazon: form.marketplaces.amazon,
+            flipkart: form.marketplaces.flipkart,
+            meesho: form.marketplaces.meesho,
+          },
+          inventory: inventoryToSave,
+          variants: variantsToSave,
+          updatedAt: serverTimestamp(),
+          ...(isNew && { createdAt: serverTimestamp() }),
         },
+        { merge: true }
+      );
 
-        /* 🔹 WEBSITE SELLING DATA (CLEAN & CONSISTENT) */
-        inventory: inventoryToSave,
-        variants: variantsToSave,
-
-        updatedAt: serverTimestamp(),
-        ...(isNew && { createdAt: serverTimestamp() }),
-      },
-      { merge: true }
-    );
-
-    navigate("/products");
-  } catch (err: any) {
-    console.error(err);
-    setError(err.message || "Failed to save product.");
-  } finally {
-    setSaving(false);
-  }
-};
-
+      navigate("/products");
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to save product.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const addVariant = () => {
-  setForm((prev) => ({
-    ...prev,
-    variants: [
-      ...(prev.variants ?? []),
-      {
-        id: crypto.randomUUID(),
-        attributes: [],          // 🔑 variant-defining attributes
-        price: prev.price,       // default to base product price
-        stock: 0,
-        discountPercent: 0,
-      },
-    ],
-  }));
-};
+    setForm((prev) => ({
+      ...prev,
+      variants: [
+        ...(prev.variants ?? []),
+        {
+          id: crypto.randomUUID(),
+          attributes: [],
+          price: prev.price,
+          stock: 0,
+          discountPercent: 0,
+          images: [], // 🔑 NEW
+        },
+      ],
+    }));
+  };
 
-const updateVariant = (
-  index: number,
-  field: keyof Variant,
-  value: any
-) => {
-  setForm((prev) => {
-    const variants = [...(prev.variants ?? [])];
-    variants[index] = {
-      ...variants[index],
-      [field]: value,
-    };
-    return { ...prev, variants };
-  });
-};
+  const updateVariant = (index: number, field: keyof Variant, value: any) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants ?? [])];
+      variants[index] = {
+        ...variants[index],
+        [field]: value,
+      };
+      return { ...prev, variants };
+    });
+  };
 
-const removeVariant = (index: number) => {
-  setForm((prev) => {
-    const variants = [...(prev.variants ?? [])];
-    variants.splice(index, 1);
-    return { ...prev, variants };
-  });
-};
+  const removeVariant = (index: number) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants ?? [])];
+      variants.splice(index, 1);
+      return { ...prev, variants };
+    });
+  };
 
-const addVariantAttribute = (variantIndex: number) => {
-  setForm((prev) => {
-    const variants = [...(prev.variants ?? [])];
-    variants[variantIndex].attributes.push({ key: "", value: "" });
-    return { ...prev, variants };
-  });
-};
+  const addVariantAttribute = (variantIndex: number) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants ?? [])];
+      variants[variantIndex].attributes.push({ key: "", value: "" });
+      return { ...prev, variants };
+    });
+  };
 
-const updateVariantAttribute = (
-  variantIndex: number,
-  attrIndex: number,
-  field: "key" | "value",
-  value: string
-) => {
-  setForm((prev) => {
-    const variants = [...(prev.variants ?? [])];
-    const attrs = [...variants[variantIndex].attributes];
-    attrs[attrIndex] = { ...attrs[attrIndex], [field]: value };
-    variants[variantIndex].attributes = attrs;
-    return { ...prev, variants };
-  });
-};
+  const updateVariantAttribute = (
+    variantIndex: number,
+    attrIndex: number,
+    field: "key" | "value",
+    value: string
+  ) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants ?? [])];
+      const attrs = [...variants[variantIndex].attributes];
+      attrs[attrIndex] = { ...attrs[attrIndex], [field]: value };
+      variants[variantIndex].attributes = attrs;
+      return { ...prev, variants };
+    });
+  };
 
-const removeVariantAttribute = (
-  variantIndex: number,
-  attrIndex: number
-) => {
-  setForm((prev) => {
-    const variants = [...(prev.variants ?? [])];
-    variants[variantIndex].attributes.splice(attrIndex, 1);
-    return { ...prev, variants };
-  });
-};
+  const removeVariantAttribute = (variantIndex: number, attrIndex: number) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants ?? [])];
+      variants[variantIndex].attributes.splice(attrIndex, 1);
+      return { ...prev, variants };
+    });
+  };
+
+  // 🔑 NEW: Toggle image selection for variant
+  // 🔑 NEW: Toggle image selection for variant
+  const toggleVariantImage = (variantIndex: number, imageUrl: string) => {
+    setForm((prev) => {
+      const variants = [...(prev.variants ?? [])];
+      const variant = { ...variants[variantIndex] };
+      const currentImages = Array.isArray(variant.images) ? [...variant.images] : [];
+      
+      if (currentImages.includes(imageUrl)) {
+        // Remove image
+        variant.images = currentImages.filter(img => img !== imageUrl);
+      } else {
+        // Add image
+        variant.images = [...currentImages, imageUrl];
+      }
+      
+      variants[variantIndex] = variant;
+      return { ...prev, variants };
+    });
+  };
 
 
   const uploadingGalleryCount = Object.keys(uploadingGalleryMap).length;
@@ -646,24 +637,22 @@ const removeVariantAttribute = (
           />
         </div>
 
-        {/* collection */}
-
+        {/* Collection */}
         <div>
-  <label className="text-sm">Collection (optional)</label>
-  <select
-    className="mt-1 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm"
-    value={form.collectionId}
-    onChange={(e) => handleChange("collectionId", e.target.value)}
-  >
-    <option value="">— No collection —</option>
-    {collections.map((c) => (
-      <option key={c.id} value={c.id}>
-        {c.name}
-      </option>
-    ))}
-  </select>
-</div>
-
+          <label className="text-sm">Collection (optional)</label>
+          <select
+            className="mt-1 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm"
+            value={form.collectionId}
+            onChange={(e) => handleChange("collectionId", e.target.value)}
+          >
+            <option value="">— No collection —</option>
+            {collections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Categories */}
         <div>
@@ -788,7 +777,7 @@ const removeVariantAttribute = (
         {/* Marketplaces */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-4 space-y-3">
           <p className="text-sm font-medium">Marketplace links</p>
-          <p className="text-xs text-neutral-400">URLs used for the “Buy on Amazon / Flipkart / Meesho” buttons.</p>
+          <p className="text-xs text-neutral-400">URLs used for the "Buy on Amazon / Flipkart / Meesho" buttons.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <div>
               <label className="text-xs text-neutral-300">Amazon URL</label>
@@ -805,221 +794,299 @@ const removeVariantAttribute = (
           </div>
         </div>
 
-{/* ================= Inventory & Variants ================= */}
+
+    {/* ================= Inventory & Variants ================= */}
 <div className="mt-8 rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-4 space-y-4">
-  <p className="text-sm font-medium">Inventory & variants</p>
-  <p className="text-xs text-neutral-400">
-    Optional settings for selling this product on your website.
-  </p>
+<p className="text-sm font-medium">Inventory & variants</p>
+<p className="text-xs text-neutral-400">
+Optional settings for selling this product on your website.
+</p>
 
-  {/* Track stock */}
-  <label className="flex items-center gap-2 text-sm">
-    <input
-      type="checkbox"
-      checked={form.inventory?.trackStock}
-      onChange={(e) =>
-        setForm((prev) => ({
-          ...prev,
-          inventory: {
-            ...prev.inventory!,
-            trackStock: e.target.checked,
-          },
-        }))
-      }
-    />
-    Track stock for this product
-  </label>
-
-  {/* Simple product (no variants) */}
-  {form.inventory?.trackStock && form.variants?.length === 0 && (
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <label className="text-xs">Available stock</label>
+{/* Track stock */}
+<label className="flex items-center gap-2 text-sm">
         <input
-          type="number"
-          className="mt-1 w-full rounded-lg bg-neutral-900 border px-3 py-2 text-sm"
-          value={form.inventory.stock ?? 0}
+          type="checkbox"
+          checked={form.inventory?.trackStock}
           onChange={(e) =>
             setForm((prev) => ({
               ...prev,
               inventory: {
                 ...prev.inventory!,
-                stock: e.target.valueAsNumber,
+                trackStock: e.target.checked,
               },
             }))
           }
         />
-      </div>
+        Track stock for this product
+      </label>
 
-      <div>
-        <label className="text-xs">Discount (%)</label>
+      {/* Simple product (no variants) */}
+      {form.inventory?.trackStock && form.variants?.length === 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs">Available stock</label>
+            <input
+              type="number"
+              className="mt-1 w-full rounded-lg bg-neutral-900 border px-3 py-2 text-sm"
+              value={form.inventory.stock ?? 0}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  inventory: {
+                    ...prev.inventory!,
+                    stock: e.target.valueAsNumber,
+                  },
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label className="text-xs">Discount (%)</label>
+            <input
+              type="number"
+              className="mt-1 w-full rounded-lg bg-neutral-900 border px-3 py-2 text-sm"
+              value={form.inventory.discountPercent ?? 0}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  inventory: {
+                    ...prev.inventory!,
+                    discountPercent: e.target.valueAsNumber,
+                  },
+                }))
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Variants toggle */}
+      <label className="flex items-center gap-2 text-sm pt-2">
         <input
-          type="number"
-          className="mt-1 w-full rounded-lg bg-neutral-900 border px-3 py-2 text-sm"
-          value={form.inventory.discountPercent ?? 0}
+          type="checkbox"
+          checked={(form.variants?.length ?? 0) > 0}
           onChange={(e) =>
-            setForm((prev) => ({
-              ...prev,
-              inventory: {
-                ...prev.inventory!,
-                discountPercent: e.target.valueAsNumber,
-              },
-            }))
+            e.target.checked
+              ? addVariant()
+              : setForm((prev) => ({ ...prev, variants: [] }))
           }
         />
-      </div>
-    </div>
-  )}
+        This product has variants (size, color, weight, etc.)
+      </label>
 
-  {/* Variants toggle */}
-  <label className="flex items-center gap-2 text-sm pt-2">
-    <input
-      type="checkbox"
-      checked={(form.variants?.length ?? 0) > 0}
-      onChange={(e) =>
-        e.target.checked
-          ? addVariant()
-          : setForm((prev) => ({ ...prev, variants: [] }))
-      }
-    />
-    This product has variants (size, color, weight, etc.)
-  </label>
+      {/* Variants */}
+      {form.variants && form.variants.length > 0 && (
+        <div className="space-y-4">
+          {form.variants.map((v, variantIndex) => (
+            <div
+              key={v.id}
+              className="rounded-xl border border-neutral-800 p-3 space-y-3"
+            >
+              <p className="text-xs font-medium text-neutral-300">
+                Variant #{variantIndex + 1}
+              </p>
 
-  {/* Variants */}
-  {form.variants && form.variants.length > 0 && (
-    <div className="space-y-4">
-      {form.variants.map((v, variantIndex) => (
-        <div
-          key={v.id}
-          className="rounded-xl border border-neutral-800 p-3 space-y-3"
-        >
-          <p className="text-xs font-medium text-neutral-300">
-            Variant #{variantIndex + 1}
-          </p>
+              {/* Variant attributes */}
+              <div className="space-y-2">
+                {v.attributes.map((attr, attrIndex) => (
+                  <div key={attrIndex} className="grid grid-cols-3 gap-2">
+                    <input
+                      className="rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
+                      placeholder="Attribute (e.g. Size)"
+                      value={attr.key}
+                      onChange={(e) =>
+                        updateVariantAttribute(
+                          variantIndex,
+                          attrIndex,
+                          "key",
+                          e.target.value
+                        )
+                      }
+                    />
+                    <input
+                      className="rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
+                      placeholder="Value (e.g. 7)"
+                      value={attr.value}
+                      onChange={(e) =>
+                        updateVariantAttribute(
+                          variantIndex,
+                          attrIndex,
+                          "value",
+                          e.target.value
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removeVariantAttribute(variantIndex, attrIndex)
+                      }
+                      className="text-red-500 text-sm"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
 
-          {/* Variant attributes */}
-          <div className="space-y-2">
-            {v.attributes.map((attr, attrIndex) => (
-              <div key={attrIndex} className="grid grid-cols-3 gap-2">
-                <input
-                  className="rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
-                  placeholder="Attribute (e.g. Size)"
-                  value={attr.key}
-                  onChange={(e) =>
-                    updateVariantAttribute(
-                      variantIndex,
-                      attrIndex,
-                      "key",
-                      e.target.value
-                    )
-                  }
-                />
-                <input
-                  className="rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
-                  placeholder="Value (e.g. 7)"
-                  value={attr.value}
-                  onChange={(e) =>
-                    updateVariantAttribute(
-                      variantIndex,
-                      attrIndex,
-                      "value",
-                      e.target.value
-                    )
-                  }
-                />
                 <button
                   type="button"
-                  onClick={() =>
-                    removeVariantAttribute(variantIndex, attrIndex)
-                  }
-                  className="text-red-500 text-sm"
+                  onClick={() => addVariantAttribute(variantIndex)}
+                  className="text-xs underline"
                 >
-                  ✕
+                  + Add attribute
                 </button>
               </div>
-            ))}
 
-            <button
-              type="button"
-              onClick={() => addVariantAttribute(variantIndex)}
-              className="text-xs underline"
-            >
-              + Add attribute
-            </button>
-          </div>
+              {/* Variant pricing & stock */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs">Price override</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
+                    value={v.price ?? form.price}
+                    onChange={(e) =>
+                      updateVariant(variantIndex, "price", e.target.valueAsNumber)
+                    }
+                  />
+                </div>
 
-          {/* Variant pricing & stock */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs">Price override</label>
-              <input
-                type="number"
-                className="mt-1 w-full rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
-                value={v.price ?? form.price}
-                onChange={(e) =>
-                  updateVariant(variantIndex, "price", e.target.valueAsNumber)
-                }
-              />
+                <div>
+                  <label className="text-xs">Stock</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
+                    value={v.stock}
+                    onChange={(e) =>
+                      updateVariant(variantIndex, "stock", e.target.valueAsNumber)
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs">Discount (%)</label>
+                  <input
+                    type="number"
+                    className="mt-1 w-full rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
+                    value={v.discountPercent ?? 0}
+                    onChange={(e) =>
+                      updateVariant(
+                        variantIndex,
+                        "discountPercent",
+                        e.target.valueAsNumber
+                      )
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* 🔑 VARIANT IMAGE SELECTION */}
+              <div className="border-t border-neutral-800 pt-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-medium">Variant Images</label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setVariantImageSelectorOpen(
+                        variantImageSelectorOpen === variantIndex ? null : variantIndex
+                      )
+                    }
+                    className="text-xs bg-neutral-800 px-2 py-1 rounded border border-neutral-700 hover:border-yellow-400"
+                  >
+                    {variantImageSelectorOpen === variantIndex ? "Close" : "Select Images"}
+                  </button>
+                </div>
+
+                {/* Selected images preview */}
+                {v.images && v.images.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {v.images.map((img) => (
+                      <div key={img} className="relative">
+                        <img
+                          src={img}
+                          alt="Variant"
+                          className="h-16 w-16 rounded-lg object-cover border-2 border-yellow-500"
+                        />
+                        <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-yellow-500 text-black text-xs flex items-center justify-center font-bold">
+                          ✓
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Image selector dropdown */}
+                {variantImageSelectorOpen === variantIndex && (
+                  <div className="p-3 bg-neutral-950 rounded-lg border border-neutral-700 space-y-2">
+                    <p className="text-xs text-neutral-400">
+                      Select from uploaded gallery images:
+                    </p>
+                    
+                    {form.images.length === 0 ? (
+                      <p className="text-xs text-neutral-500 italic">
+                        No gallery images uploaded yet. Upload images above first.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-2">
+                        {form.images.map((img) => {
+                          const isSelected = v.images?.includes(img);
+                          return (
+                            <button
+                              key={img}
+                              type="button"
+                              onClick={() => toggleVariantImage(variantIndex, img)}
+                              className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                                isSelected
+                                  ? "border-yellow-500 ring-2 ring-yellow-500/50"
+                                  : "border-neutral-700 hover:border-neutral-500"
+                              }`}
+                            >
+                              <img
+                                src={img}
+                                alt="Gallery"
+                                className="h-20 w-20 object-cover"
+                              />
+                              {isSelected && (
+                                <div className="absolute inset-0 bg-yellow-500/20 flex items-center justify-center">
+                                  <div className="h-6 w-6 rounded-full bg-yellow-500 text-black text-sm flex items-center justify-center font-bold">
+                                    ✓
+                                  </div>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => removeVariant(variantIndex)}
+                className="text-red-500 text-sm"
+              >
+                Remove variant
+              </button>
             </div>
-
-            <div>
-              <label className="text-xs">Stock</label>
-              <input
-                type="number"
-                className="mt-1 w-full rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
-                value={v.stock}
-                onChange={(e) =>
-                  updateVariant(variantIndex, "stock", e.target.valueAsNumber)
-                }
-              />
-            </div>
-
-            <div>
-              <label className="text-xs">Discount (%)</label>
-              <input
-                type="number"
-                className="mt-1 w-full rounded-lg bg-neutral-900 border px-2 py-1 text-sm"
-                value={v.discountPercent ?? 0}
-                onChange={(e) =>
-                  updateVariant(
-                    variantIndex,
-                    "discountPercent",
-                    e.target.valueAsNumber
-                  )
-                }
-              />
-            </div>
-          </div>
+          ))}
 
           <button
             type="button"
-            onClick={() => removeVariant(variantIndex)}
-            className="text-red-500 text-sm"
+            onClick={addVariant}
+            className="text-xs underline"
           >
-            Remove variant
+            + Add another variant
           </button>
         </div>
-      ))}
-
-      <button
-        type="button"
-        onClick={addVariant}
-        className="text-xs underline"
-      >
-        + Add another variant
-      </button>
+      )}
     </div>
-  )}
-</div>
 
-
-
-        <button disabled={saving} className="mt-4 rounded-lg bg-yellow-500 text-black px-4 py-2 text-sm font-medium disabled:opacity-50">
-          {saving ? "Saving..." : "Save"}
-        </button>
-
-        
-      </form>
-    </AdminLayout>
-  );
+    <button disabled={saving} className="mt-4 rounded-lg bg-yellow-500 text-black px-4 py-2 text-sm font-medium disabled:opacity-50">
+      {saving ? "Saving..." : "Save"}
+    </button>
+  </form>
+</AdminLayout>)
 }

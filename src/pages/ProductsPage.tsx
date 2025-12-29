@@ -59,53 +59,92 @@ export default function ProductsPage() {
         </Link>
       }
     >
-      <table className="w-full text-sm border border-neutral-800 rounded-xl overflow-hidden">
-        <thead className="bg-neutral-900">
-          <tr>
-            <th className="text-left px-4 py-3">Name</th>
-            <th className="text-left px-4 py-3">Price</th>
-            <th className="text-left px-4 py-3">Collection</th>
-            <th className="px-4 py-3 text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((p) => (
-            <tr key={p.id} className="border-t border-neutral-800">
-              <td className="px-4 py-3">
-                {p.name || <span className="text-neutral-500">Untitled</span>}
-              </td>
-              <td className="px-4 py-3">
-                {p.currency} {(p.price ?? 0).toLocaleString("en-IN")}
-              </td>
-              <td className="px-4 py-3">{p.collectionId || "—"}</td>
-              <td className="px-4 py-3 text-right space-x-2">
-                <Link
-                  to={`/products/${p.id}`}
-                  className="text-xs px-3 py-1 rounded-full bg-neutral-800"
-                >
-                  Edit
-                </Link>
-                <button
-                  onClick={() => handleDelete(p.id)}
-                  className="text-xs px-3 py-1 rounded-full bg-red-600/80"
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-          {products.length === 0 && (
-            <tr>
-              <td
-                className="px-4 py-4 text-center text-neutral-400"
-                colSpan={4}
+<div className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden">
+  <table className="w-full text-sm">
+    <thead className="bg-neutral-950">
+      <tr className="text-neutral-400">
+        <th className="px-6 py-4 text-left font-medium">Product</th>
+        <th className="px-6 py-4 text-left font-medium">Price</th>
+        <th className="px-6 py-4 text-left font-medium">Collection</th>
+        <th className="px-6 py-4 text-right font-medium">Actions</th>
+      </tr>
+    </thead>
+
+    <tbody className="divide-y divide-neutral-800">
+      {products.map((p) => (
+        <tr
+          key={p.id}
+          className="hover:bg-neutral-800/60 transition"
+        >
+          {/* Product */}
+          <td className="px-6 py-4">
+            <div className="flex flex-col">
+              <span className="font-medium text-white">
+                {p.name || "Untitled product"}
+              </span>
+
+              {p.isFeatured && (
+                <span className="mt-1 inline-block w-fit rounded-full bg-yellow-500/10 text-yellow-400 text-[11px] px-2 py-0.5">
+                  Featured
+                </span>
+              )}
+            </div>
+          </td>
+
+          {/* Price */}
+          <td className="px-6 py-4 text-neutral-200">
+            {p.currency} {p.price.toLocaleString("en-IN")}
+          </td>
+
+          {/* Collection */}
+          <td className="px-6 py-4 text-neutral-400">
+            {p.collectionId || "—"}
+          </td>
+
+          {/* Actions */}
+          <td className="px-6 py-4 text-right">
+            <div className="inline-flex items-center gap-2">
+              <Link
+                to={`/products/${p.id}`}
+                className="rounded-full bg-neutral-800 hover:bg-neutral-700 px-3 py-1 text-xs transition"
               >
-                No products yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                Edit
+              </Link>
+
+              <button
+                onClick={() => handleDelete(p.id)}
+                className="rounded-full bg-red-600/80 hover:bg-red-600 px-3 py-1 text-xs transition"
+              >
+                Delete
+              </button>
+            </div>
+          </td>
+        </tr>
+      ))}
+
+      {/* Empty state */}
+      {products.length === 0 && (
+        <tr>
+          <td
+            colSpan={4}
+            className="px-6 py-12 text-center text-neutral-400"
+          >
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-sm">No products yet</span>
+              <Link
+                to="/products/new"
+                className="text-xs text-yellow-400 hover:underline"
+              >
+                Add your first product
+              </Link>
+            </div>
+          </td>
+        </tr>
+      )}
+    </tbody>
+  </table>
+</div>
+
     </AdminLayout>
   );
 }
