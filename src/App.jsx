@@ -12,6 +12,8 @@ import SettingsPage from "./pages/SettingsPage";
 
 import ChatsPage from "./pages/ChatsPage";
 import ChatDetailPage from "./pages/ChatDetailPage";
+import OrdersPage from "./pages/OrdersPage";
+import OrderDetailPage from "./pages/OrderDetailPage";
 
 export default function App() {
   return (
@@ -76,6 +78,22 @@ export default function App() {
           <ProtectedRoute>
             <ChatDetailPage />
           </ProtectedRoute>}
+        />
+        <Route
+          path="/orders"
+          element={
+            <ProtectedRoute>
+              <OrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orders/:orderId"
+          element={
+            <ProtectedRoute>
+              <OrderDetailPage />
+            </ProtectedRoute>
+          }
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />

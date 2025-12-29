@@ -16,6 +16,7 @@ const navItems = [
   { to: "/products", label: "Products" },
   { to: "/collections", label: "Collections" },
   { to: "/homepage", label: "Homepage" },
+  { to: "/orders", label: "Orders" },
   { to: "/chats", label: "Chats", notify: true }, // 🔥 NEW
   { to: "/settings", label: "Settings" },
 ];
