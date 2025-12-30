@@ -802,26 +802,31 @@ export default function OrderDetailPage() {
                 <div className="space-y-2 text-sm">
                   {order.payment?.razorpayOrderId && (
                     <div className="flex justify-between gap-4">
-                      <span className="text-neutral-400">Razorpay order</span>
-                      <span className="text-neutral-200 text-right">
+                      <span className="text-neutral-400 shrink-0">Razorpay order</span>
+                      <span className="text-neutral-200 text-right break-all max-w-[65%]">
                         {order.payment.razorpayOrderId}
                       </span>
                     </div>
                   )}
                   {order.payment?.razorpayPaymentId && (
                     <div className="flex justify-between gap-4">
-                      <span className="text-neutral-400">Razorpay payment</span>
-                      <span className="text-neutral-200 text-right">
+                      <span className="text-neutral-400 shrink-0">Razorpay payment</span>
+                      <span className="text-neutral-200 text-right break-all max-w-[65%]">
                         {order.payment.razorpayPaymentId}
                       </span>
                     </div>
                   )}
                   {order.payment?.razorpaySignature && (
                     <div className="flex justify-between gap-4">
-                      <span className="text-neutral-400">Signature</span>
-                      <span className="text-neutral-200 text-right">
-                        {order.payment.razorpaySignature}
-                      </span>
+                      <span className="text-neutral-400 shrink-0">Signature</span>
+                      <details className="text-right max-w-[65%]">
+                        <summary className="cursor-pointer text-neutral-200 text-[11px]">
+                          View
+                        </summary>
+                        <div className="mt-1 font-mono text-[10px] text-neutral-300 break-all">
+                          {order.payment.razorpaySignature}
+                        </div>
+                      </details>
                     </div>
                   )}
                 </div>
