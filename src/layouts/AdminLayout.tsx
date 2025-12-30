@@ -19,6 +19,7 @@ const navItems = [
   { to: "/homepage", label: "Homepage" },
   { to: "/orders", label: "Orders" },
   { to: "/users", label: "Users" },
+  { to: "/reviews", label: "Reviews" },
   { to: "/chats", label: "Chats", notify: true }, // 🔥 NEW
   { to: "/settings", label: "Settings" },
 ];
