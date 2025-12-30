@@ -13,6 +13,7 @@ import {
 } from "../firebase";
 import AdminLayout from "../layouts/AdminLayout";
 import { Timestamp } from "firebase/firestore";
+import { generateInvoicePdf, type InvoiceLineItem, type InvoiceOrder, type InvoiceSellerProfile } from "../lib/invoicePdf";
 
 type OrderDetail = {
   id: string;
@@ -83,6 +84,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [status, setStatus] = useState<string>("pending");
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -235,6 +237,19 @@ export default function OrderDetailPage() {
     return parts.join(", ");
   };
 
+  const formatAddressMultiline = (addr?: OrderDetail["address"]) => {
+    if (!addr) return "";
+    const lines = [
+      addr.line1,
+      [addr.city, addr.state].filter(Boolean).join(", "),
+      addr.postalCode,
+      addr.country,
+    ]
+      .map((s) => (typeof s === "string" ? s.trim() : ""))
+      .filter(Boolean);
+    return lines.join("\n");
+  };
+
   const formatOrderDate = (value: unknown) => {
     if (!value) return "—";
     if (typeof value === "number") return new Date(value).toLocaleString("en-IN");
@@ -297,6 +312,218 @@ export default function OrderDetailPage() {
       : subtotal != null
         ? subtotal + (shipping ?? 0)
         : undefined;
+
+  const downloadInvoice = async () => {
+    if (!order) return;
+    setInvoiceLoading(true);
+    setError(null);
+    try {
+      const settingsSnap = await getDoc(doc(db, "siteSettings", "main"));
+      const invoiceCfg = (settingsSnap.exists() ? (settingsSnap.data() as any)?.invoice : undefined) || {};
+      const brandName =
+        typeof invoiceCfg?.brandName === "string" && invoiceCfg.brandName.trim().length
+          ? invoiceCfg.brandName.trim()
+          : "Pearl Bloom";
+      const companyName =
+        typeof invoiceCfg?.companyName === "string"
+          ? invoiceCfg.companyName.trim()
+          : typeof invoiceCfg?.sellerName === "string"
+            ? invoiceCfg.sellerName.trim()
+            : "";
+      const sellerAddress = typeof invoiceCfg?.sellerAddress === "string" ? invoiceCfg.sellerAddress : "";
+      const sellerPhone = typeof invoiceCfg?.sellerPhone === "string" ? invoiceCfg.sellerPhone.trim() : "";
+      const sellerEmail = typeof invoiceCfg?.sellerEmail === "string" ? invoiceCfg.sellerEmail.trim() : "";
+      const sellerWebsite = typeof invoiceCfg?.sellerWebsite === "string" ? invoiceCfg.sellerWebsite.trim() : "";
+      const sellerGstin = typeof invoiceCfg?.sellerGstin === "string" ? invoiceCfg.sellerGstin.trim() : "";
+      const invoicePrefix = typeof invoiceCfg?.prefix === "string" ? invoiceCfg.prefix.trim() : "";
+      const defaultTaxRate =
+        typeof invoiceCfg?.defaultTaxRate === "number" && Number.isFinite(invoiceCfg.defaultTaxRate)
+          ? invoiceCfg.defaultTaxRate
+          : 0;
+      const qrUrlTemplate =
+        typeof invoiceCfg?.qrUrlTemplate === "string" ? invoiceCfg.qrUrlTemplate.trim() : "";
+      const invoiceNotes = typeof invoiceCfg?.notes === "string" ? invoiceCfg.notes : "";
+      const invoiceBankDetails = typeof invoiceCfg?.bankDetails === "string" ? invoiceCfg.bankDetails : "";
+
+      const seller: InvoiceSellerProfile = {
+        brandName,
+        companyName: companyName || undefined,
+        addressLines: sellerAddress
+          .split(/\r?\n/)
+          .map((l: string) => l.trim())
+          .filter(Boolean),
+        phone: sellerPhone || undefined,
+        email: sellerEmail || undefined,
+        website: sellerWebsite || undefined,
+        gstin: sellerGstin || undefined,
+      };
+
+      const customerName = order.address?.fullName || order.user?.name || undefined;
+      const customerPhone = order.phone || order.address?.phone || order.user?.phone || undefined;
+      const customerEmail = order.user?.email || undefined;
+
+      const lineItems: InvoiceLineItem[] = normalizedItems.map((it) => ({
+        name: it.name || it.sku || it.productId || "Item",
+        variantLabel: it.variantLabel,
+        sku: it.sku,
+        quantity: it.quantity || 0,
+        unitPrice: it.price || 0,
+        lineTotal: it.lineTotal || 0,
+      }));
+
+      const readNumber = (...values: any[]) => {
+        for (const v of values) {
+          if (typeof v === "number" && Number.isFinite(v)) return v;
+        }
+        return undefined;
+      };
+
+      const discountValue = Math.max(
+        0,
+        readNumber(
+          (order as any)?.discount,
+          (order as any)?.couponDiscount,
+          (order as any)?.discountAmount,
+          (order as any)?.promoDiscount,
+          (order as any)?.promotionDiscount
+        ) ?? 0
+      );
+
+      const shippingAmount = typeof shipping === "number" ? shipping : 0;
+      const totalOrdered = typeof order.total === "number" ? order.total : undefined;
+
+      const qrFromTemplate = qrUrlTemplate
+        ? qrUrlTemplate
+            .replaceAll("{orderId}", order.id)
+            .replaceAll("{displayId}", order.displayId || order.id)
+        : "";
+
+      const qrValue =
+        qrFromTemplate ||
+        (typeof order?.tracking?.trackingUrl === "string" && order.tracking.trackingUrl.trim().length
+          ? order.tracking.trackingUrl.trim()
+          : `${window.location.origin}/orders/${order.id}`);
+
+      const grossItemsFromOrder =
+        typeof totalOrdered === "number" ? Math.max(0, totalOrdered - shippingAmount + discountValue) : undefined;
+
+      const taxFromOrder =
+        typeof (order as any)?.tax === "number" && Number.isFinite((order as any).tax)
+          ? Math.max(0, (order as any).tax)
+          : undefined;
+
+      const taxRate =
+        typeof defaultTaxRate === "number" && Number.isFinite(defaultTaxRate) && defaultTaxRate > 0
+          ? defaultTaxRate
+          : undefined;
+
+      const grossForSplit =
+        typeof grossItemsFromOrder === "number" && grossItemsFromOrder > 0
+          ? grossItemsFromOrder
+          : lineItems.reduce((s, it) => s + (it.lineTotal || 0), 0);
+
+      const taxSplit =
+        taxFromOrder != null
+          ? taxFromOrder
+          : taxRate != null && grossForSplit > 0
+            ? (grossForSplit * taxRate) / (100 + taxRate)
+            : undefined;
+
+      const netSubtotalSplit =
+        typeof taxSplit === "number" && grossForSplit > 0 ? Math.max(0, grossForSplit - taxSplit) : undefined;
+
+      const adjustedItems =
+        typeof netSubtotalSplit === "number" && grossForSplit > 0
+          ? (() => {
+              const ratio = netSubtotalSplit / grossForSplit;
+              const rounded = (n: number) => Math.round(n * 100) / 100;
+              const out = lineItems.map((it) => ({
+                ...it,
+                unitPrice: rounded(it.unitPrice * ratio),
+                lineTotal: rounded(it.lineTotal * ratio),
+              }));
+              const sum = out.reduce((s, it) => s + (it.lineTotal || 0), 0);
+              const diff = rounded(netSubtotalSplit - sum);
+              if (out.length && diff !== 0) {
+                const last = out[out.length - 1];
+                out[out.length - 1] = { ...last, lineTotal: rounded((last.lineTotal || 0) + diff) };
+              }
+              return out;
+            })()
+          : lineItems;
+
+      const adjustedSubtotal = adjustedItems.reduce((s, it) => s + (it.lineTotal || 0), 0);
+      const computedTax =
+        typeof totalOrdered === "number"
+          ? Math.max(0, totalOrdered - (adjustedSubtotal + shippingAmount - discountValue))
+          : typeof taxSplit === "number"
+            ? Math.max(0, taxSplit)
+            : undefined;
+
+      const computedTotal =
+        typeof totalOrdered === "number"
+          ? totalOrdered
+          : typeof total === "number"
+            ? total
+            : typeof adjustedSubtotal === "number"
+              ? adjustedSubtotal + shippingAmount - discountValue + (computedTax ?? 0)
+              : undefined;
+
+      const invoiceOrder: InvoiceOrder = {
+        id: order.id,
+        displayId: order.displayId,
+        currency,
+        createdAtText: formatOrderDate(order.createdAt),
+        invoicePrefix: invoicePrefix || undefined,
+        seller,
+        notes: invoiceNotes || undefined,
+        bankDetails: invoiceBankDetails || undefined,
+        taxRatePercent: taxRate,
+        customer: {
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail,
+          address: formatAddressMultiline(order.address),
+        },
+        shipping: {
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail,
+          address: formatAddressMultiline(order.address),
+        },
+        payment: {
+          method: "Razorpay",
+          reference: order.payment?.razorpayPaymentId || undefined,
+        },
+        totals: {
+          subtotal: Number.isFinite(adjustedSubtotal) ? adjustedSubtotal : undefined,
+          shipping: shippingAmount > 0 ? shippingAmount : undefined,
+          discount: discountValue > 0 ? discountValue : undefined,
+          tax: typeof computedTax === "number" ? computedTax : undefined,
+          total: typeof computedTotal === "number" ? computedTotal : undefined,
+        },
+        items: adjustedItems,
+        qrValue,
+      };
+
+      const pdfBytes = await generateInvoicePdf(invoiceOrder);
+      const safeBytes = new Uint8Array(pdfBytes);
+      const blob = new Blob([safeBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const id = order.displayId || order.id;
+      a.href = url;
+      a.download = `Invoice-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err?.message || "Failed to generate invoice");
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
 
   return (
     <AdminLayout
@@ -688,6 +915,13 @@ export default function OrderDetailPage() {
                 Actions
               </h2>
               <div className="flex items-center gap-2">
+                <button
+                  disabled={invoiceLoading}
+                  onClick={downloadInvoice}
+                  className="text-[11px] rounded-full border border-yellow-500/60 px-3 py-1.5 text-yellow-200 hover:bg-yellow-500/10 transition disabled:opacity-60"
+                >
+                  {invoiceLoading ? "Generating…" : "Download invoice"}
+                </button>
                 <button
                   onClick={() => navigate("/orders")}
                   className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-900 transition"

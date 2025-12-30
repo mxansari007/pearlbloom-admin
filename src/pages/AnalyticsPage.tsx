@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import AdminLayout from "../layouts/AdminLayout";
 import { getPosthogReportHttp } from "../lib/functions";
 import {
@@ -287,6 +288,7 @@ function IndiaStateHeatMap({ rows }: { rows: TopRow[] }) {
 }
 
 export default function AnalyticsPage() {
+  const navigate = useNavigate();
   const callPosthog = useMemo(() => {
     try {
       return getPosthogReportHttp();
@@ -846,10 +848,26 @@ export default function AnalyticsPage() {
                     <tr
                       key={u.distinct_id}
                       className="bg-neutral-950/40 hover:bg-neutral-900/40 transition cursor-pointer"
-                      onClick={() => loadSelectedUser(u.distinct_id)}
+                      onClick={() => {
+                        if (u.name) {
+                          navigate(`/users/${u.distinct_id}`);
+                          return;
+                        }
+                        loadSelectedUser(u.distinct_id);
+                      }}
                     >
                       <td className="px-4 py-2 text-[12px] text-neutral-200">
-                        {u.name || "Unknown"}
+                        {u.name ? (
+                          <Link
+                            to={`/users/${u.distinct_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:underline"
+                          >
+                            {u.name}
+                          </Link>
+                        ) : (
+                          "Unknown"
+                        )}
                         <div className="text-[11px] text-neutral-500 mt-0.5">
                           {u.distinct_id}
                         </div>

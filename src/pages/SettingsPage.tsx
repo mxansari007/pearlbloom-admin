@@ -43,6 +43,20 @@ type SettingsForm = {
   contactPhone: string;
   footerLinks: FooterLink[];
   socialLinks: SocialLink[];
+
+  invoiceSellerName: string;
+  invoiceBrandName: string;
+  invoiceCompanyName: string;
+  invoiceSellerAddress: string;
+  invoiceSellerPhone: string;
+  invoiceSellerEmail: string;
+  invoiceSellerWebsite: string;
+  invoiceSellerGstin: string;
+  invoicePrefix: string;
+  invoiceDefaultTaxRate: number;
+  invoiceQrUrlTemplate: string;
+  invoiceNotes: string;
+  invoiceBankDetails: string;
 };
 
 /* ---------------- Defaults ---------------- */
@@ -62,6 +76,20 @@ const emptySettings: SettingsForm = {
   contactPhone: "",
   footerLinks: [{ label: "Collections", href: "/collections" }],
   socialLinks: [],
+
+  invoiceSellerName: "Pearl Bloom",
+  invoiceBrandName: "Pearl Bloom",
+  invoiceCompanyName: "",
+  invoiceSellerAddress: "",
+  invoiceSellerPhone: "",
+  invoiceSellerEmail: "",
+  invoiceSellerWebsite: "",
+  invoiceSellerGstin: "",
+  invoicePrefix: "INV",
+  invoiceDefaultTaxRate: 0,
+  invoiceQrUrlTemplate: "",
+  invoiceNotes: "Thank you for shopping with us.\nThis is a computer-generated invoice.",
+  invoiceBankDetails: "",
 };
 
 export default function SettingsPage() {
@@ -97,6 +125,29 @@ export default function SettingsPage() {
           contactPhone: data.footer?.contactPhone ?? "",
           footerLinks: data.footer?.links ?? [],
           socialLinks: data.footer?.socialLinks ?? [],
+
+          invoiceSellerName: data.invoice?.sellerName ?? emptySettings.invoiceSellerName,
+          invoiceBrandName:
+            data.invoice?.brandName ??
+            data.siteName ??
+            emptySettings.invoiceBrandName,
+          invoiceCompanyName:
+            data.invoice?.companyName ??
+            data.invoice?.sellerName ??
+            "",
+          invoiceSellerAddress: data.invoice?.sellerAddress ?? "",
+          invoiceSellerPhone: data.invoice?.sellerPhone ?? "",
+          invoiceSellerEmail: data.invoice?.sellerEmail ?? "",
+          invoiceSellerWebsite: data.invoice?.sellerWebsite ?? "",
+          invoiceSellerGstin: data.invoice?.sellerGstin ?? "",
+          invoicePrefix: data.invoice?.prefix ?? emptySettings.invoicePrefix,
+          invoiceDefaultTaxRate:
+            typeof data.invoice?.defaultTaxRate === "number"
+              ? data.invoice.defaultTaxRate
+              : emptySettings.invoiceDefaultTaxRate,
+          invoiceQrUrlTemplate: data.invoice?.qrUrlTemplate ?? "",
+          invoiceNotes: data.invoice?.notes ?? emptySettings.invoiceNotes,
+          invoiceBankDetails: data.invoice?.bankDetails ?? "",
         });
       }
       setLoading(false);
@@ -244,6 +295,22 @@ export default function SettingsPage() {
           contactPhone: form.contactPhone,
           links: form.footerLinks,
           socialLinks: form.socialLinks,
+        },
+
+        invoice: {
+          sellerName: form.invoiceCompanyName || form.invoiceSellerName,
+          brandName: form.invoiceBrandName,
+          companyName: form.invoiceCompanyName,
+          sellerAddress: form.invoiceSellerAddress,
+          sellerPhone: form.invoiceSellerPhone,
+          sellerEmail: form.invoiceSellerEmail,
+          sellerWebsite: form.invoiceSellerWebsite,
+          sellerGstin: form.invoiceSellerGstin,
+          prefix: form.invoicePrefix,
+          defaultTaxRate: Number.isFinite(form.invoiceDefaultTaxRate) ? form.invoiceDefaultTaxRate : 0,
+          qrUrlTemplate: form.invoiceQrUrlTemplate,
+          notes: form.invoiceNotes,
+          bankDetails: form.invoiceBankDetails,
         },
 
         updatedAt: serverTimestamp(),
@@ -474,6 +541,102 @@ export default function SettingsPage() {
               + Add social link
             </button>
           </div>
+        </section>
+
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4">
+          <h2 className="text-lg font-semibold">Invoice</h2>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <input
+              placeholder="Brand name (shown on top)"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoiceBrandName}
+              onChange={(e) => handleChange("invoiceBrandName", e.target.value)}
+            />
+            <input
+              placeholder="Company legal name"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoiceCompanyName}
+              onChange={(e) => handleChange("invoiceCompanyName", e.target.value)}
+            />
+            <input
+              placeholder="GSTIN"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoiceSellerGstin}
+              onChange={(e) => handleChange("invoiceSellerGstin", e.target.value)}
+            />
+          </div>
+
+          <textarea
+            rows={4}
+            placeholder={"Seller address (multi-line)\nLine 1\nLine 2\nCity, State - Pincode"}
+            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            value={form.invoiceSellerAddress}
+            onChange={(e) => handleChange("invoiceSellerAddress", e.target.value)}
+          />
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <input
+              placeholder="Seller phone"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoiceSellerPhone}
+              onChange={(e) => handleChange("invoiceSellerPhone", e.target.value)}
+            />
+            <input
+              placeholder="Seller email"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoiceSellerEmail}
+              onChange={(e) => handleChange("invoiceSellerEmail", e.target.value)}
+            />
+            <input
+              placeholder="Website"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoiceSellerWebsite}
+              onChange={(e) => handleChange("invoiceSellerWebsite", e.target.value)}
+            />
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-4">
+            <input
+              placeholder="Invoice prefix (e.g. INV)"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoicePrefix}
+              onChange={(e) => handleChange("invoicePrefix", e.target.value)}
+            />
+            <input
+              placeholder="Default tax rate (%)"
+              type="number"
+              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+              value={form.invoiceDefaultTaxRate}
+              onChange={(e) => handleChange("invoiceDefaultTaxRate", e.target.valueAsNumber)}
+            />
+            <div className="text-xs text-neutral-400 flex items-center">
+              Used only if order doesn’t already have a tax value.
+            </div>
+          </div>
+
+          <input
+            placeholder="QR link template (optional). Use {orderId} or {displayId}"
+            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            value={form.invoiceQrUrlTemplate}
+            onChange={(e) => handleChange("invoiceQrUrlTemplate", e.target.value)}
+          />
+
+          <textarea
+            rows={4}
+            placeholder={"Invoice notes / terms (one per line)\nThank you...\nReturn policy..."}
+            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            value={form.invoiceNotes}
+            onChange={(e) => handleChange("invoiceNotes", e.target.value)}
+          />
+
+          <textarea
+            rows={4}
+            placeholder={"Bank details (optional, multi-line)\nAccount Name:\nAccount No:\nIFSC:\nBank:"}
+            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            value={form.invoiceBankDetails}
+            onChange={(e) => handleChange("invoiceBankDetails", e.target.value)}
+          />
         </section>
 
         <button
