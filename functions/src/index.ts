@@ -1,3 +1,3 @@
 // index.ts
-export { uploadImageCallable, deleteImageCallable } from "./callables";
-export { uploadImageHttp, deleteImageHttp } from "./httpWrappers";
+export { uploadImageCallable, deleteImageCallable, posthogReportCallable } from "./callables";
+export { uploadImageHttp, deleteImageHttp, posthogReportHttp } from "./httpWrappers";

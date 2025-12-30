@@ -13,6 +13,7 @@ type AdminLayoutProps = {
 
 const navItems = [
   { to: "/", label: "Dashboard" },
+  { to: "/analytics", label: "Analytics" },
   { to: "/products", label: "Products" },
   { to: "/collections", label: "Collections" },
   { to: "/homepage", label: "Homepage" },

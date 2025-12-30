@@ -5,6 +5,7 @@ import {
   httpsCallable,
   connectFunctionsEmulator,
 } from "firebase/functions";
+import { auth } from "../firebase";
 
 /**
  * Functions client (Vite-friendly).
@@ -40,6 +41,28 @@ type DeleteImagePayload = {
 type DeleteImageResponse = {
   result?: unknown;
   error?: string;
+};
+
+export type PosthogReportRequest =
+  | { report: "event_definitions"; limit?: number; days?: number; hours?: number }
+  | { report: "time_series"; days?: number; hours?: number; event: string }
+  | { report: "total"; days?: number; hours?: number; event: string }
+  | {
+      report: "top_property";
+      days?: number;
+      hours?: number;
+      event: string;
+      property: string;
+      limit?: number;
+    }
+  | { report: "recent_events"; days?: number; hours?: number; limit?: number }
+  | { report: "geo_india_states"; days?: number; hours?: number; limit?: number; event?: string }
+  | { report: "geo_india_cities"; days?: number; hours?: number; limit?: number; event?: string }
+  | { report: "active_users"; days?: number; hours?: number; limit?: number; event?: string }
+  | { report: "user_recent_events"; days?: number; hours?: number; limit?: number; distinct_id: string };
+
+export type PosthogReportResponse = {
+  results?: any;
 };
 
 export function initFunctionsClient() {
@@ -78,4 +101,41 @@ export function getDeleteCallable() {
     f,
     "deleteImageCallable"
   );
+}
+
+export function getPosthogReportCallable() {
+  const f = initFunctionsClient();
+  return httpsCallable<PosthogReportRequest, PosthogReportResponse>(
+    f,
+    "posthogReportCallable"
+  );
+}
+
+export function getPosthogReportHttp() {
+  const projectId = (import.meta.env.VITE_FIREBASE_PROJECT_ID as string) || "";
+  const fnName = "posthogReportHttp";
+  const baseUrl = projectId ? `https://${REGION}-${projectId}.cloudfunctions.net/${fnName}` : `/${fnName}`;
+
+  return async (data: PosthogReportRequest) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Authentication required.");
+    const token = await user.getIdToken();
+
+    const resp = await fetch(baseUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = typeof (json as any)?.error === "string" ? (json as any).error : undefined;
+      throw new Error(msg || `Request failed (${resp.status})`);
+    }
+
+    return { data: json as PosthogReportResponse };
+  };
 }

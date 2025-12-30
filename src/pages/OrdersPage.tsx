@@ -61,6 +61,8 @@ type StatusFilter =
   | "closed"
   | (typeof STATUS_OPTIONS)[number];
 
+type SortKey = "created_desc" | "created_asc" | "total_desc" | "total_asc";
+
 const PAGE_SIZES = [10, 20, 50] as const;
 
 export default function OrdersPage() {
@@ -70,6 +72,7 @@ export default function OrdersPage() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("created_desc");
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(20);
   const [pageIndex, setPageIndex] = useState(0);
   const [hasNext, setHasNext] = useState(false);
@@ -185,6 +188,15 @@ export default function OrdersPage() {
     return [where("status", "==", statusFilter)];
   }, [statusFilter]);
 
+  const buildSortConstraints = useCallback((): QueryConstraint[] => {
+    if (sortKey === "created_asc") return [orderBy("createdAt", "asc")];
+    if (sortKey === "total_desc")
+      return [orderBy("total", "desc"), orderBy("createdAt", "desc")];
+    if (sortKey === "total_asc")
+      return [orderBy("total", "asc"), orderBy("createdAt", "desc")];
+    return [orderBy("createdAt", "desc")];
+  }, [sortKey]);
+
   const fetchPage = useCallback(
     async (opts: {
       pageIndex: number;
@@ -192,7 +204,7 @@ export default function OrdersPage() {
     }) => {
       const constraints: QueryConstraint[] = [];
       constraints.push(...buildStatusConstraints());
-      constraints.push(orderBy("createdAt", "desc"));
+      constraints.push(...buildSortConstraints());
       if (opts.startAfterDoc) constraints.push(startAfter(opts.startAfterDoc));
       constraints.push(limit(pageSize));
 
@@ -227,7 +239,7 @@ export default function OrdersPage() {
         return next;
       });
     },
-    [buildStatusConstraints, pageSize, resolveUser]
+    [buildStatusConstraints, buildSortConstraints, pageSize, resolveUser]
   );
 
   const loadFirstPage = useCallback(async () => {
@@ -329,12 +341,26 @@ export default function OrdersPage() {
             >
               <option value="all">All</option>
               <option value="open">Open (pending → shipped)</option>
-              <option value="closed">Closed (delivered / canceled)</option>
+              <option value="closed">Closed (delivered / failed / cancelled)</option>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-neutral-400">Sort</span>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              className="rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
+            >
+              <option value="created_desc">Newest first</option>
+              <option value="created_asc">Oldest first</option>
+              <option value="total_desc">Total: high → low</option>
+              <option value="total_asc">Total: low → high</option>
             </select>
           </div>
 
