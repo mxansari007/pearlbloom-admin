@@ -1,6 +1,10 @@
 // src/lib/functions.ts
 import { getApp } from "firebase/app";
-import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
+import {
+  getFunctions,
+  httpsCallable,
+  connectFunctionsEmulator,
+} from "firebase/functions";
 
 /**
  * Functions client (Vite-friendly).
@@ -16,6 +20,27 @@ const EMULATOR_HOST = (import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST as string) |
 const EMULATOR_PORT = Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT ?? 5001);
 
 let functionsClient: ReturnType<typeof getFunctions> | undefined;
+
+type UploadImagePayload = {
+  filename: string;
+  mimeType: string;
+  base64: string;
+};
+
+type UploadImageResponse = {
+  url?: string;
+  public_id?: string;
+  error?: string;
+};
+
+type DeleteImagePayload = {
+  public_id: string;
+};
+
+type DeleteImageResponse = {
+  result?: unknown;
+  error?: string;
+};
 
 export function initFunctionsClient() {
   if (functionsClient) return functionsClient;
@@ -41,10 +66,16 @@ export function initFunctionsClient() {
 
 export function getUploadCallable() {
   const f = initFunctionsClient();
-  return httpsCallable(f, "uploadImageCallable");
+  return httpsCallable<UploadImagePayload, UploadImageResponse>(
+    f,
+    "uploadImageCallable"
+  );
 }
 
 export function getDeleteCallable() {
   const f = initFunctionsClient();
-  return httpsCallable(f, "deleteImageCallable");
+  return httpsCallable<DeleteImagePayload, DeleteImageResponse>(
+    f,
+    "deleteImageCallable"
+  );
 }

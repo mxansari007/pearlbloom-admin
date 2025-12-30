@@ -9,9 +9,11 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import ProtectedRoute from "../components/ProtectedRoute";
 import AdminLayout from "../layouts/AdminLayout";
 
@@ -24,6 +26,18 @@ type Message = {
 type ChatUser = {
   name: string;
   phone: string;
+  userId?: string;
+};
+
+const composeName = (obj: any): string | undefined => {
+  const raw = typeof obj?.name === "string" ? obj.name : undefined;
+  const fn =
+    obj?.firstName ?? obj?.firstname ?? obj?.userFirstName ?? obj?.userFirstname;
+  const ln =
+    obj?.lastName ?? obj?.lastname ?? obj?.userLastName ?? obj?.userLastname;
+  const combined = [fn, ln].filter(Boolean).join(" ").trim();
+  const finalName = (raw && raw.trim().length ? raw : combined) || undefined;
+  return finalName && finalName.trim().length ? finalName : undefined;
 };
 
 export default function ChatDetailPage() {
@@ -33,6 +47,7 @@ export default function ChatDetailPage() {
   const [user, setUser] = useState<ChatUser>({
     name: "Guest User",
     phone: "Phone not shared",
+    userId: undefined,
   });
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -49,10 +64,20 @@ export default function ChatDetailPage() {
       if (!snap.exists()) return;
 
       const data = snap.data();
+      const uid =
+        (typeof (data as any)?.userId === "string" ? (data as any).userId : undefined) ||
+        (typeof (data as any)?.uid === "string" ? (data as any).uid : undefined) ||
+        (typeof (data as any)?.user?.id === "string" ? (data as any).user.id : undefined);
+      const phone =
+        (typeof (data as any)?.user?.phone === "string" ? (data as any).user.phone : undefined) ||
+        (typeof (data as any)?.phone === "string" ? (data as any).phone : undefined) ||
+        (typeof (data as any)?.userPhone === "string" ? (data as any).userPhone : undefined) ||
+        "Phone not shared";
 
       setUser({
-        name: data.user?.name?.trim() || "Guest User",
-        phone: data.user?.phone?.trim() || "Phone not shared",
+        name: (composeName(data.user) || "Guest User").trim(),
+        phone: String(phone).trim(),
+        userId: uid,
       });
 
       // mark chat as read
@@ -65,6 +90,24 @@ export default function ChatDetailPage() {
 
     return unsub;
   }, [chatId]);
+
+  useEffect(() => {
+    (async () => {
+      if (!chatId) return;
+      if (user.userId) return;
+      const phone = user.phone && user.phone !== "Phone not shared" ? user.phone : undefined;
+      if (!phone) return;
+      try {
+        const uSnaps = await getDocs(
+          query(collection(db, "users"), where("phone", "==", phone))
+        );
+        const docId = uSnaps.docs[0]?.id;
+        if (docId) {
+          setUser((prev) => ({ ...prev, userId: docId }));
+        }
+      } catch {}
+    })();
+  }, [chatId, user.phone, user.userId]);
 
   /* ---------------- Realtime messages ---------------- */
 
@@ -135,9 +178,17 @@ export default function ChatDetailPage() {
                 <p className="text-sm text-neutral-400">{user.phone}</p>
               </div>
 
-              <p className="text-xs text-neutral-500">
-                Chat ID: {chatId}
-              </p>
+              <div className="flex items-center gap-2">
+                {user.userId && (
+                  <Link
+                    to={`/users/${user.userId}`}
+                    className="text-[11px] rounded-full border border-yellow-500/60 px-3 py-1.5 text-yellow-200 hover:bg-yellow-500/10 transition"
+                  >
+                    View user
+                  </Link>
+                )}
+                <p className="text-xs text-neutral-500">Chat ID: {chatId}</p>
+              </div>
             </div>
           </div>
 

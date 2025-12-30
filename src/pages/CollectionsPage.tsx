@@ -44,6 +44,12 @@ export default function CollectionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingThumb, setUploadingThumb] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    Partial<Record<keyof typeof emptyForm, string>>
+  >({});
+  const [slugTouched, setSlugTouched] = useState(false);
 
   const functions = getFunctions(undefined, "us-central1");
   const uploadImage = httpsCallable(functions, "uploadImageCallable");
@@ -65,13 +71,40 @@ export default function CollectionsPage() {
 
   /* ---------------- Helpers ---------------- */
 
+  const slugify = (value: string) =>
+    value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setFieldErrors({});
+    setFormError(null);
+    setFormSuccess(null);
+    setSlugTouched(false);
   };
 
   const handleChange = (field: keyof typeof form, value: any) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === "slug") setSlugTouched(true);
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const copy = { ...prev };
+      delete copy[field];
+      return copy;
+    });
+    setFormError(null);
+    setFormSuccess(null);
+    setForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === "name" && !slugTouched) {
+        next.slug = slugify(String(value || ""));
+      }
+      return next;
+    });
   };
 
   const fileToBase64 = (file: File): Promise<string> =>
@@ -91,8 +124,18 @@ export default function CollectionsPage() {
     if (!file) return;
 
     setUploadingThumb(true);
+    setFormError(null);
+    setFormSuccess(null);
 
     try {
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Please select a valid image file.");
+      }
+      const maxBytes = 3 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        throw new Error("Image is too large. Max size is 3MB.");
+      }
+
       const base64 = await fileToBase64(file);
 
       // delete old thumbnail if exists
@@ -106,6 +149,10 @@ export default function CollectionsPage() {
         folder: "collections",
       });
 
+      if (!res?.data?.url || !res?.data?.public_id) {
+        throw new Error("Upload failed. No image URL returned.");
+      }
+
       setForm((prev) => ({
         ...prev,
         thumbnail: {
@@ -115,9 +162,12 @@ export default function CollectionsPage() {
       }));
     } catch (err) {
       console.error(err);
-      alert("Thumbnail upload failed");
+      setFormError(
+        err instanceof Error ? err.message : "Thumbnail upload failed"
+      );
     } finally {
       setUploadingThumb(false);
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -126,32 +176,71 @@ export default function CollectionsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setFormError(null);
+    setFormSuccess(null);
 
-    const payload = {
-      ...form,
-      priority: Number(form.priority),
-    };
+    try {
+      const normalizedName = form.name.trim();
+      const normalizedSlug = slugify(form.slug || normalizedName);
+      const priorityNumber = Number(form.priority);
 
-    if (!payload.slug) {
-      payload.slug = payload.name.toLowerCase().replace(/\s+/g, "-");
+      const nextFieldErrors: Partial<Record<keyof typeof emptyForm, string>> =
+        {};
+      if (!normalizedName) nextFieldErrors.name = "Name is required.";
+      if (!normalizedSlug) nextFieldErrors.slug = "Slug is required.";
+      if (normalizedSlug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalizedSlug)) {
+        nextFieldErrors.slug =
+          "Slug must contain only lowercase letters, numbers, and hyphens.";
+      }
+      if (!Number.isFinite(priorityNumber) || priorityNumber < 0) {
+        nextFieldErrors.priority = "Priority must be 0 or more.";
+      }
+
+      if (Object.keys(nextFieldErrors).length) {
+        setFieldErrors(nextFieldErrors);
+        return;
+      }
+
+      const payload: Omit<CollectionItem, "id"> = {
+        ...form,
+        name: normalizedName,
+        slug: normalizedSlug,
+        priority: priorityNumber,
+      };
+
+      if (editingId) {
+        await updateDoc(doc(db, "collections", editingId), payload);
+        setCollectionsList((prev) =>
+          prev
+            .map((c) => (c.id === editingId ? { ...c, ...payload } : c))
+            .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+        );
+        setFormSuccess("Collection updated.");
+      } else {
+        const ref = await addDoc(collection(db, "collections"), payload);
+        setCollectionsList((prev) =>
+          [...prev, { ...payload, id: ref.id }].sort(
+            (a, b) => (a.priority ?? 0) - (b.priority ?? 0)
+          )
+        );
+        setFormSuccess("Collection created.");
+      }
+
+      resetForm();
+    } catch (err: any) {
+      console.error(err);
+      setFormError(err?.message || "Failed to save collection.");
+    } finally {
+      setSaving(false);
     }
-
-    if (editingId) {
-      await updateDoc(doc(db, "collections", editingId), payload);
-      setCollectionsList((prev) =>
-        prev.map((c) => (c.id === editingId ? { ...c, ...payload } : c))
-      );
-    } else {
-      const ref = await addDoc(collection(db, "collections"), payload);
-      setCollectionsList((prev) => [...prev, { ...payload, id: ref.id }]);
-    }
-
-    resetForm();
-    setSaving(false);
   };
 
   const handleEdit = (item: CollectionItem) => {
     setEditingId(item.id);
+    setFormError(null);
+    setFormSuccess(null);
+    setFieldErrors({});
+    setSlugTouched(true);
     setForm({
       name: item.name,
       slug: item.slug,
@@ -165,14 +254,22 @@ export default function CollectionsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this collection?")) return;
 
-    const item = collectionsList.find((c) => c.id === id);
-    if (item?.thumbnail?.public_id) {
-      await deleteImage({ public_id: item.thumbnail.public_id });
-    }
+    setFormError(null);
+    setFormSuccess(null);
+    try {
+      const item = collectionsList.find((c) => c.id === id);
+      if (item?.thumbnail?.public_id) {
+        await deleteImage({ public_id: item.thumbnail.public_id });
+      }
 
-    await deleteDoc(doc(db, "collections", id));
-    setCollectionsList((prev) => prev.filter((c) => c.id !== id));
-    if (editingId === id) resetForm();
+      await deleteDoc(doc(db, "collections", id));
+      setCollectionsList((prev) => prev.filter((c) => c.id !== id));
+      if (editingId === id) resetForm();
+      setFormSuccess("Collection deleted.");
+    } catch (err: any) {
+      console.error(err);
+      setFormError(err?.message || "Failed to delete collection.");
+    }
   };
 
   /* ---------------- UI ---------------- */
@@ -187,20 +284,50 @@ export default function CollectionsPage() {
         onSubmit={handleSubmit}
         className="mb-8 rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4"
       >
+        {formError && (
+          <div className="rounded-xl border border-red-700 bg-red-900/10 px-4 py-3 text-[12px] text-red-300">
+            {formError}
+          </div>
+        )}
+        {formSuccess && (
+          <div className="rounded-xl border border-green-700 bg-green-900/10 px-4 py-3 text-[12px] text-green-300">
+            {formSuccess}
+          </div>
+        )}
+
         <div className="grid gap-4 md:grid-cols-2">
-          <input
-            placeholder="Name"
-            className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.name}
-            onChange={(e) => handleChange("name", e.target.value)}
-            required
-          />
-          <input
-            placeholder="Slug"
-            className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.slug}
-            onChange={(e) => handleChange("slug", e.target.value)}
-          />
+          <div>
+            <input
+              placeholder="Name"
+              className={`w-full rounded-lg bg-neutral-950 border px-3 py-2 text-sm ${
+                fieldErrors.name ? "border-red-600" : "border-neutral-700"
+              }`}
+              value={form.name}
+              onChange={(e) => handleChange("name", e.target.value)}
+              aria-invalid={Boolean(fieldErrors.name)}
+            />
+            {fieldErrors.name && (
+              <p className="text-[11px] text-red-300 mt-1">{fieldErrors.name}</p>
+            )}
+          </div>
+          <div>
+            <input
+              placeholder="Slug"
+              className={`w-full rounded-lg bg-neutral-950 border px-3 py-2 text-sm ${
+                fieldErrors.slug ? "border-red-600" : "border-neutral-700"
+              }`}
+              value={form.slug}
+              onChange={(e) => handleChange("slug", e.target.value)}
+              aria-invalid={Boolean(fieldErrors.slug)}
+            />
+            {fieldErrors.slug ? (
+              <p className="text-[11px] text-red-300 mt-1">{fieldErrors.slug}</p>
+            ) : (
+              <p className="text-[11px] text-neutral-500 mt-1">
+                Auto-generated from name unless you edit it.
+              </p>
+            )}
+          </div>
         </div>
 
         <textarea
@@ -212,14 +339,25 @@ export default function CollectionsPage() {
         />
 
         <div className="flex flex-wrap gap-4 items-center">
-          <input
-            type="number"
-            className="w-24 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.priority}
-            onChange={(e) =>
-              handleChange("priority", e.target.valueAsNumber || 1)
-            }
-          />
+          <div>
+            <input
+              type="number"
+              min={0}
+              className={`w-24 rounded-lg bg-neutral-950 border px-3 py-2 text-sm ${
+                fieldErrors.priority ? "border-red-600" : "border-neutral-700"
+              }`}
+              value={form.priority}
+              onChange={(e) =>
+                handleChange("priority", e.target.valueAsNumber || 0)
+              }
+              aria-invalid={Boolean(fieldErrors.priority)}
+            />
+            {fieldErrors.priority && (
+              <p className="text-[11px] text-red-300 mt-1">
+                {fieldErrors.priority}
+              </p>
+            )}
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -253,12 +391,23 @@ export default function CollectionsPage() {
           )}
         </div>
 
-        <button
-          disabled={saving}
-          className="rounded-lg bg-yellow-500 text-black px-4 py-2 text-sm font-medium"
-        >
-          {editingId ? "Save changes" : "Add collection"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={saving || uploadingThumb}
+            className="rounded-lg bg-yellow-500 text-black px-4 py-2 text-sm font-medium disabled:opacity-60"
+          >
+            {saving ? "Saving…" : editingId ? "Save changes" : "Add collection"}
+          </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-200 hover:bg-neutral-950/40 transition"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </form>
 
       {/* Table */}

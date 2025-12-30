@@ -17,6 +17,7 @@ const navItems = [
   { to: "/collections", label: "Collections" },
   { to: "/homepage", label: "Homepage" },
   { to: "/orders", label: "Orders" },
+  { to: "/users", label: "Users" },
   { to: "/chats", label: "Chats", notify: true }, // 🔥 NEW
   { to: "/settings", label: "Settings" },
 ];
@@ -47,6 +48,10 @@ export default function AdminLayout({
     });
   }, []);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
   /* ---------------- Logout ---------------- */
 
   const handleLogout = async () => {
@@ -63,12 +68,11 @@ export default function AdminLayout({
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white">
-      {/* Top bar */}
-      <header className="border-b border-neutral-800/80 backdrop-blur">
-        <div className="max-w-6xl mx-auto flex items-center justify-between py-4 px-4 gap-4">
+    <div className="h-screen bg-neutral-950 text-white flex overflow-hidden">
+      <aside className="hidden md:flex w-64 flex-col border-r border-neutral-800/80">
+        <div className="px-5 py-5 border-b border-neutral-800/80">
           <Link to="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center text-xs">
+            <div className="h-9 w-9 rounded-full bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center text-xs">
               PB
             </div>
             <div>
@@ -78,46 +82,40 @@ export default function AdminLayout({
               <p className="text-xs text-neutral-200">Admin console</p>
             </div>
           </Link>
+        </div>
 
-          {/* Desktop nav */}
-          <div className="hidden sm:flex items-center gap-3">
-            <nav className="flex gap-2 text-xs text-neutral-300">
-              {navItems.map((item) => (
-                <AdminNavLink
-                  key={item.to}
-                  to={item.to}
-                  active={isActive(location.pathname, item.to)}
-                >
-                  <span className="flex items-center gap-2">
-                    {item.label}
-
-                    {item.notify && unreadChats > 0 && (
-                      <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
-                        {unreadChats}
-                      </span>
-                    )}
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-[13px]">
+          {navItems.map((item) => (
+            <SideNavLink
+              key={item.to}
+              to={item.to}
+              active={isActive(location.pathname, item.to)}
+            >
+              <span className="flex items-center justify-between w-full">
+                <span className="text-sm">{item.label}</span>
+                {item.notify && unreadChats > 0 && (
+                  <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
+                    {unreadChats}
                   </span>
-                </AdminNavLink>
-              ))}
-            </nav>
+                )}
+              </span>
+            </SideNavLink>
+          ))}
+        </nav>
 
-            <button
-              onClick={handleLogout}
-              className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
-            >
-              Logout
-            </button>
-          </div>
+        <div className="p-4 border-t border-neutral-800/80">
+          <button
+            onClick={handleLogout}
+            className="w-full text-[12px] rounded-lg border border-neutral-700 px-3 py-2 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
+          >
+            Logout
+          </button>
+        </div>
+      </aside>
 
-          {/* Mobile actions */}
-          <div className="sm:hidden flex items-center gap-2">
-            <button
-              onClick={handleLogout}
-              className="text-[11px] rounded-full border border-neutral-700 px-2.5 py-1 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
-            >
-              Log out
-            </button>
-
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="md:hidden border-b border-neutral-800/80 backdrop-blur">
+          <div className="px-4 py-3 flex items-center justify-between gap-3">
             <button
               onClick={() => setMobileOpen((v) => !v)}
               className="flex flex-col justify-center items-center gap-[4px] p-2 border border-neutral-700 rounded-lg hover:border-yellow-400 hover:bg-neutral-900 transition"
@@ -139,67 +137,118 @@ export default function AdminLayout({
                 }`}
               />
             </button>
-          </div>
-        </div>
 
-        {/* Mobile menu */}
+            <Link to="/" className="flex items-center gap-2 min-w-0">
+              <div className="h-8 w-8 rounded-full bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center text-xs">
+                PB
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400 truncate">
+                  Pearl Bloom
+                </p>
+                <p className="text-xs text-neutral-200 truncate">Admin console</p>
+              </div>
+            </Link>
+
+            <button
+              onClick={handleLogout}
+              className="text-[11px] rounded-full border border-neutral-700 px-2.5 py-1 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
+            >
+              Log out
+            </button>
+          </div>
+        </header>
+
         {mobileOpen && (
-          <div className="sm:hidden border-t border-neutral-800 bg-neutral-950/98">
-            <nav className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-2 text-xs">
-              {navItems.map((item) => (
+          <div className="md:hidden fixed inset-0 z-50">
+            <div
+              className="absolute inset-0 bg-black/70"
+              onClick={() => setMobileOpen(false)}
+            />
+            <div className="absolute inset-y-0 left-0 w-[78vw] max-w-[320px] bg-neutral-950 border-r border-neutral-800/80 flex flex-col">
+              <div className="px-5 py-5 border-b border-neutral-800/80">
                 <Link
-                  key={item.to}
-                  to={item.to}
+                  to="/"
                   onClick={handleNavClick}
-                  className={`px-3 py-2 rounded-lg flex justify-between items-center ${
-                    isActive(location.pathname, item.to)
-                      ? "bg-neutral-800 text-yellow-200 border border-yellow-500/60"
-                      : "text-neutral-300 border border-transparent hover:bg-neutral-900 hover:text-yellow-100"
-                  }`}
+                  className="flex items-center gap-2"
                 >
-                  <span>{item.label}</span>
-
-                  {item.notify && unreadChats > 0 && (
-                    <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
-                      {unreadChats}
-                    </span>
-                  )}
+                  <div className="h-9 w-9 rounded-full bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center text-xs">
+                    PB
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">
+                      Pearl Bloom
+                    </p>
+                    <p className="text-xs text-neutral-200">Admin console</p>
+                  </div>
                 </Link>
-              ))}
-            </nav>
-          </div>
-        )}
-      </header>
+              </div>
 
-      {/* Page content */}
-      <main className="max-w-6xl mx-auto py-8 px-4">
-        {(title || subtitle || actions) && (
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              {title && (
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {title}
-                </h1>
-              )}
-              {subtitle && (
-                <p className="text-sm text-neutral-400 mt-1">{subtitle}</p>
-              )}
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-[13px]">
+                {navItems.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={handleNavClick}
+                    className={`w-full px-3 py-2 rounded-lg flex items-center justify-between transition ${
+                      isActive(location.pathname, item.to)
+                        ? "bg-neutral-900 text-yellow-200 border border-yellow-500/60"
+                        : "text-neutral-300 border border-transparent hover:bg-neutral-900 hover:text-yellow-100"
+                    }`}
+                  >
+                    <span className="text-sm">{item.label}</span>
+                    {item.notify && unreadChats > 0 && (
+                      <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
+                        {unreadChats}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </nav>
+
+              <div className="p-4 border-t border-neutral-800/80">
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-[12px] rounded-lg border border-neutral-700 px-3 py-2 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
-            {actions && (
-              <div className="flex items-center gap-2">{actions}</div>
-            )}
           </div>
         )}
 
-        {children}
-      </main>
+        <div className="flex-1 overflow-y-auto">
+          <main className="max-w-6xl mx-auto py-8 px-4">
+            {(title || subtitle || actions) && (
+              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  {title && (
+                    <h1 className="text-2xl font-semibold tracking-tight">
+                      {title}
+                    </h1>
+                  )}
+                  {subtitle && (
+                    <p className="text-sm text-neutral-400 mt-1">{subtitle}</p>
+                  )}
+                </div>
+                {actions && (
+                  <div className="flex items-center gap-2">{actions}</div>
+                )}
+              </div>
+            )}
+
+            {children}
+          </main>
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ---------------- Helpers ---------------- */
 
-function AdminNavLink({
+function SideNavLink({
   to,
   active,
   children,
@@ -211,9 +260,9 @@ function AdminNavLink({
   return (
     <Link
       to={to}
-      className={`px-3 py-1.5 rounded-full text-xs transition ${
+      className={`w-full px-3 py-2 rounded-lg flex items-center transition ${
         active
-          ? "bg-neutral-800 text-yellow-200 border border-yellow-500/60"
+          ? "bg-neutral-900 text-yellow-200 border border-yellow-500/60"
           : "text-neutral-300 hover:bg-neutral-900 hover:text-yellow-100 border border-transparent"
       }`}
     >

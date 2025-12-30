@@ -13,7 +13,6 @@ import {
 import AdminLayout from "../layouts/AdminLayout";
 
 import { getUploadCallable, getDeleteCallable } from "../lib/functions";
-import type { HttpsCallable } from "firebase/functions";
 
 type VariantAttribute = {
   key: string;
@@ -141,7 +140,7 @@ export default function ProductEditPage() {
       console.error("Failed to create upload callable:", e);
       return undefined;
     }
-  }, []) as HttpsCallable | undefined;
+  }, []);
 
   const callDeleteImage = useMemo(() => {
     try {
@@ -150,7 +149,7 @@ export default function ProductEditPage() {
       console.error("Failed to create delete callable:", e);
       return undefined;
     }
-  }, []) as HttpsCallable | undefined;
+  }, []);
 
   // Load existing product
   useEffect(() => {
@@ -292,9 +291,11 @@ export default function ProductEditPage() {
 
     try {
       const uploaded = await uploadFileViaCallable(file);
-      if (!uploaded?.url) throw new Error("No URL returned from upload");
-      setForm((prev) => ({ ...prev, thumbnailUrl: uploaded.url }));
-      if (uploaded.public_id) setImagesMeta((m) => ({ ...m, [uploaded.url]: uploaded.public_id }));
+      const url = uploaded?.url;
+      if (!url) throw new Error("No URL returned from upload");
+      setForm((prev) => ({ ...prev, thumbnailUrl: url }));
+      const publicId = uploaded.public_id;
+      if (publicId) setImagesMeta((m) => ({ ...m, [url]: publicId }));
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Thumbnail upload failed.");
@@ -319,17 +320,19 @@ export default function ProductEditPage() {
 
       try {
         const uploaded = await uploadFileViaCallable(file);
-        if (!uploaded?.url) throw new Error("No URL returned from upload");
+        const url = uploaded?.url;
+        if (!url) throw new Error("No URL returned from upload");
 
         setForm((prev) => {
           const images = [...prev.images];
           const idx = images.indexOf(localPreview);
-          if (idx !== -1) images[idx] = uploaded.url;
-          else images.push(uploaded.url);
+          if (idx !== -1) images[idx] = url;
+          else images.push(url);
           return { ...prev, images };
         });
 
-        if (uploaded.public_id) setImagesMeta((m) => ({ ...m, [uploaded.url]: uploaded.public_id }));
+        const publicId = uploaded.public_id;
+        if (publicId) setImagesMeta((m) => ({ ...m, [url]: publicId }));
       } catch (err: any) {
         console.error("File upload failed", err);
         setError(err.message || "One file failed to upload.");

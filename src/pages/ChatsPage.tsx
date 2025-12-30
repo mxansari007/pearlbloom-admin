@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   collection,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
+  where,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
@@ -13,13 +15,28 @@ import AdminLayout from "../layouts/AdminLayout";
 
 type Chat = {
   id: string;
+  userId?: string;
   user?: {
     name?: string;
+    firstName?: string;
+    lastName?: string;
     phone?: string;
+    email?: string;
   };
   lastMessage?: string;
   lastSender?: "user" | "admin";
   lastMessageAt?: Timestamp;
+};
+
+const composeName = (obj: any): string | undefined => {
+  const raw = typeof obj?.name === "string" ? obj.name : undefined;
+  const fn =
+    obj?.firstName ?? obj?.firstname ?? obj?.userFirstName ?? obj?.userFirstname;
+  const ln =
+    obj?.lastName ?? obj?.lastname ?? obj?.userLastName ?? obj?.userLastname;
+  const combined = [fn, ln].filter(Boolean).join(" ").trim();
+  const finalName = (raw && raw.trim().length ? raw : combined) || undefined;
+  return finalName && finalName.trim().length ? finalName : undefined;
 };
 
 export default function ChatsPage() {
@@ -42,6 +59,39 @@ export default function ChatsPage() {
     });
   }, []);
 
+  const navigateToUser = async (e: React.MouseEvent, c: Chat) => {
+    e.stopPropagation();
+    const directUserId =
+      c.userId ||
+      (typeof (c as any)?.uid === "string" ? (c as any).uid : undefined) ||
+      (typeof (c as any)?.user?.id === "string" ? (c as any).user.id : undefined);
+
+    if (directUserId) {
+      navigate(`/users/${directUserId}`);
+      return;
+    }
+
+    const phone = typeof c.user?.phone === "string" ? c.user.phone : undefined;
+    if (!phone) {
+      navigate("/users");
+      return;
+    }
+
+    try {
+      const uSnaps = await getDocs(
+        query(collection(db, "users"), where("phone", "==", phone))
+      );
+      const docId = uSnaps.docs[0]?.id;
+      if (docId) {
+        navigate(`/users/${docId}`);
+      } else {
+        navigate("/users");
+      }
+    } catch {
+      navigate("/users");
+    }
+  };
+
   return (
     <ProtectedRoute>
       <AdminLayout title="Chats" subtitle="Explore your customer conversations">
@@ -53,6 +103,7 @@ export default function ChatsPage() {
           ) : (
             chats.map((c) => {
               const unread = c.lastSender === "user";
+              const name = composeName(c.user) || "Unknown user";
 
               return (
                 <div
@@ -70,15 +121,26 @@ export default function ChatsPage() {
                 >
                   {/* Header row */}
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-sm">
-                      {c.user?.name || "Unknown user"}
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{name}</div>
+                      <div className="text-[11px] text-neutral-500 truncate">
+                        {c.user?.phone || c.user?.email || "—"}
+                      </div>
                     </div>
 
-                    {unread && (
-                      <span className="text-[10px] bg-yellow-500 text-black px-2 py-[1px] rounded-full">
-                        New
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => navigateToUser(e, c)}
+                        className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-900 transition"
+                      >
+                        View user
+                      </button>
+                      {unread && (
+                        <span className="text-[10px] bg-yellow-500 text-black px-2 py-[1px] rounded-full">
+                          New
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Bubble-style message preview */}
