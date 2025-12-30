@@ -101,6 +101,7 @@ type PosthogReportRequest =
   | { report: "recent_events"; days?: number; hours?: number; limit?: number }
   | { report: "geo_india_states"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "geo_india_cities"; days?: number; hours?: number; limit?: number; event?: string }
+  | { report: "traffic_sources"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "active_users"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "user_recent_events"; days?: number; hours?: number; limit?: number; distinct_id: string };
 
@@ -279,6 +280,41 @@ export const posthogReportHttp = https.onRequest(
           apiKey,
           query: q,
           name: data.report === "geo_india_states" ? "Admin: India states" : "Admin: India cities",
+        });
+        res.json({ results: json?.results ?? json?.result ?? json });
+        return;
+      }
+
+      if (data.report === "traffic_sources") {
+        const lim = getSafeLimit((data as any).limit, 8, 50);
+        const ev = typeof (data as any).event === "string" && (data as any).event.trim().length
+          ? (data as any).event.trim()
+          : "$pageview";
+        const eventLit = hogqlStringLiteral(ev);
+        const utmSource = "lower(coalesce(properties.$utm_source, ''))";
+        const refDomain = "lower(coalesce(properties.$referring_domain, properties.$referrer_domain, ''))";
+        const referrer = "lower(coalesce(properties.$referrer, ''))";
+        const sourceExpr = `multiIf(
+          (${utmSource} like '%instagram%' or ${refDomain} like '%instagram%' or ${referrer} like '%instagram%'), 'Instagram',
+          (${utmSource} like '%google%' or ${refDomain} like '%google%' or ${referrer} like '%google%'), 'Google Search',
+          (${utmSource} like '%facebook%' or ${refDomain} like '%facebook%' or ${referrer} like '%facebook%'), 'Facebook',
+          (${utmSource} like '%whatsapp%' or ${refDomain} like '%whatsapp%' or ${referrer} like '%whatsapp%'), 'WhatsApp',
+          (${utmSource} like '%youtube%' or ${refDomain} like '%youtube%' or ${referrer} like '%youtube%'), 'YouTube',
+          (${utmSource} like '%twitter%' or ${utmSource} like '%x%' or ${refDomain} like '%t.co%' or ${refDomain} like '%twitter%' or ${refDomain} like '%x.com%' or ${referrer} like '%t.co%' or ${referrer} like '%twitter%' or ${referrer} like '%x.com%'), 'X/Twitter',
+          (${utmSource} = '' and ${refDomain} = '' and ${referrer} = ''), 'Direct',
+          'Other'
+        )`;
+        const q = `select ${sourceExpr} as value, count() as count from events where event = ${eventLit} and timestamp >= ${toDateTimeLiteral(
+          dateFrom
+        )} and timestamp < ${toDateTimeLiteral(
+          dateTo
+        )} group by value order by count desc limit ${lim}`;
+        const json = await posthogQuery({
+          host,
+          projectId,
+          apiKey,
+          query: q,
+          name: "Admin: traffic sources",
         });
         res.json({ results: json?.results ?? json?.result ?? json });
         return;

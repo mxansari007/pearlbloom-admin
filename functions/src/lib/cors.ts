@@ -24,10 +24,12 @@ export function getAllowedOrigins(): string[] {
  */
 export function setCorsHeaders(res: Response, origin?: string | undefined) {
   const allowed = getAllowedOrigins();
-  if (origin && allowed.includes(origin)) {
+  if (origin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
+    if (allowed.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
   }
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");

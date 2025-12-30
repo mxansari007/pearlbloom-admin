@@ -58,6 +58,7 @@ export type PosthogReportRequest =
   | { report: "recent_events"; days?: number; hours?: number; limit?: number }
   | { report: "geo_india_states"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "geo_india_cities"; days?: number; hours?: number; limit?: number; event?: string }
+  | { report: "traffic_sources"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "active_users"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "user_recent_events"; days?: number; hours?: number; limit?: number; distinct_id: string };
 

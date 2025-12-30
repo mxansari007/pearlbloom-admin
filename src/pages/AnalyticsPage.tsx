@@ -323,6 +323,7 @@ export default function AnalyticsPage() {
 
   const [indiaStates, setIndiaStates] = useState<TopRow[]>([]);
   const [indiaCities, setIndiaCities] = useState<TopRow[]>([]);
+  const [trafficSources, setTrafficSources] = useState<TopRow[]>([]);
 
   const [activeUsers, setActiveUsers] = useState<Array<{ distinct_id: string; count: number; last_seen?: string; name?: string }>>([]);
   const [selectedDistinctId, setSelectedDistinctId] = useState<string | null>(null);
@@ -391,6 +392,7 @@ export default function AnalyticsPage() {
         recentRes,
         indiaStatesRes,
         indiaCitiesRes,
+        trafficSourcesRes,
         activeUsersRes,
       ] = await Promise.all([
         callPosthog({ report: "total", ...windowPayload, event: pageviewEvent }),
@@ -417,6 +419,7 @@ export default function AnalyticsPage() {
         callPosthog({ report: "recent_events", ...windowPayload, limit: 30 }),
         callPosthog({ report: "geo_india_states", ...windowPayload, limit: 12, event: pageviewEvent }),
         callPosthog({ report: "geo_india_cities", ...windowPayload, limit: 12, event: pageviewEvent }),
+        callPosthog({ report: "traffic_sources", ...windowPayload, limit: 12, event: pageviewEvent }),
         callPosthog({ report: "active_users", ...windowPayload, limit: 12, event: pageviewEvent }),
       ]);
 
@@ -436,6 +439,7 @@ export default function AnalyticsPage() {
 
       setIndiaStates(toTopRows((indiaStatesRes.data as any)?.results));
       setIndiaCities(toTopRows((indiaCitiesRes.data as any)?.results));
+      setTrafficSources(toTopRows((trafficSourcesRes.data as any)?.results));
 
       const auArr: any[] = Array.isArray((activeUsersRes.data as any)?.results)
         ? (activeUsersRes.data as any).results
@@ -861,6 +865,24 @@ export default function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
+          <div className="flex items-end justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-neutral-200">
+                Traffic Sources
+              </h2>
+              <p className="text-[11px] text-neutral-500 mt-1">
+                Where {pageviewEvent} came from (referrer / UTM).
+              </p>
+            </div>
+          </div>
+          {trafficSources.length ? (
+            <HorizontalBars rows={trafficSources} />
+          ) : (
+            <div className="text-sm text-neutral-500">No data.</div>
           )}
         </section>
       </div>
