@@ -1,12 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.posthogReportCallable = exports.deleteImageCallable = exports.uploadImageCallable = void 0;
+exports.nimbuspostCouriersCallable = exports.posthogReportCallable = exports.deleteImageCallable = exports.uploadImageCallable = void 0;
 // functions/src/callables.ts
 const https_1 = require("firebase-functions/v2/https");
 const firebase_functions_1 = require("firebase-functions");
 const uploadHandler_1 = require("./handlers/uploadHandler");
 const cloudinary_1 = require("./lib/cloudinary");
 const https_2 = require("firebase-functions/v2/https");
+const nimbuspost_1 = require("./lib/nimbuspost");
 /**
  * onCall: uploadImage
  * secrets are declared here so runtime will inject them.
@@ -173,6 +174,23 @@ exports.posthogReportCallable = (0, https_1.onCall)({
         if (err instanceof https_2.HttpsError)
             throw err;
         throw new https_2.HttpsError("internal", err?.message || "PostHog query failed");
+    }
+});
+exports.nimbuspostCouriersCallable = (0, https_1.onCall)({
+    region: "us-central1",
+    cors: true,
+}, async (req) => {
+    try {
+        if (!req.auth?.uid)
+            throw new https_2.HttpsError("unauthenticated", "Authentication required.");
+        const couriers = await (0, nimbuspost_1.nimbuspostGetCouriers)();
+        return { couriers };
+    }
+    catch (err) {
+        firebase_functions_1.logger.error("nimbuspostCouriers callable error:", err);
+        if (err instanceof https_2.HttpsError)
+            throw err;
+        throw new https_2.HttpsError("internal", err?.message || "Failed to fetch couriers");
     }
 });
 //# sourceMappingURL=callables.js.map

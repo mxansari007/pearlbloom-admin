@@ -18,6 +18,7 @@ import OrderDetailPage from "./pages/OrderDetailPage";
 import UsersPage from "./pages/UsersPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import ReviewsPage from "./pages/ReviewsPage";
+import ShipmentsPage from "./pages/ShipmentsPage";
 
 export default function App() {
   return (
@@ -104,6 +105,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <OrderDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/shipments"
+          element={
+            <ProtectedRoute>
+              <ShipmentsPage />
             </ProtectedRoute>
           }
         />

@@ -4,6 +4,7 @@ import { logger } from "firebase-functions";
 import { handleUploadBase64 } from "./handlers/uploadHandler";
 import { configureCloudinary, destroyImage } from "./lib/cloudinary";
 import { HttpsError } from "firebase-functions/v2/https";
+import { nimbuspostGetCouriers } from "./lib/nimbuspost";
 
 /**
  * onCall: uploadImage
@@ -244,6 +245,24 @@ export const posthogReportCallable = onCall(
       logger.error("posthogReport callable error:", err);
       if (err instanceof HttpsError) throw err;
       throw new HttpsError("internal", err?.message || "PostHog query failed");
+    }
+  }
+);
+
+export const nimbuspostCouriersCallable = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (req: CallableRequest<any>) => {
+    try {
+      if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+      const couriers = await nimbuspostGetCouriers();
+      return { couriers };
+    } catch (err: any) {
+      logger.error("nimbuspostCouriers callable error:", err);
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError("internal", err?.message || "Failed to fetch couriers");
     }
   }
 );
