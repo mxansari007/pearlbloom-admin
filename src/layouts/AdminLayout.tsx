@@ -18,6 +18,7 @@ const navItems = [
   { to: "/collections", label: "Collections" },
   { to: "/homepage", label: "Homepage" },
   { to: "/orders", label: "Orders" },
+  { to: "/coupons", label: "Coupons" },
   { to: "/shipments", label: "Shipments" },
   { to: "/users", label: "Users" },
   { to: "/reviews", label: "Reviews" },

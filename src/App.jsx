@@ -19,6 +19,8 @@ import UsersPage from "./pages/UsersPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import ReviewsPage from "./pages/ReviewsPage";
 import ShipmentsPage from "./pages/ShipmentsPage";
+import CouponsPage from "./pages/CouponsPage";
+import CouponEditPage from "./pages/CouponEditPage";
 
 export default function App() {
   return (
@@ -105,6 +107,30 @@ export default function App() {
           element={
             <ProtectedRoute>
               <OrderDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/coupons"
+          element={
+            <ProtectedRoute>
+              <CouponsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/coupons/new"
+          element={
+            <ProtectedRoute>
+              <CouponEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/coupons/:code"
+          element={
+            <ProtectedRoute>
+              <CouponEditPage />
             </ProtectedRoute>
           }
         />
