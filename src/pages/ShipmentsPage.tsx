@@ -11,6 +11,23 @@ type Courier = {
 
 const normalize = (v: unknown) => String(v ?? "").trim();
 
+const asNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const n = Number(value.trim());
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+};
+
+const parseNonNegativeNumber = (value: string): number => {
+  const raw = String(value ?? "").replace(/,/g, "").trim();
+  if (!raw) return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  return n < 0 ? 0 : n;
+};
+
 const asStringList = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   const out = value
@@ -59,6 +76,9 @@ export default function ShipmentsPage() {
   const [deliverableText, setDeliverableText] = useState("");
   const [deliverableDirty, setDeliverableDirty] = useState(false);
 
+  const [globalShippingRateText, setGlobalShippingRateText] = useState<string>("0");
+  const [freeShippingAboveText, setFreeShippingAboveText] = useState<string>("0");
+
   const [fetchingCouriers, setFetchingCouriers] = useState(false);
   const [courierQuery, setCourierQuery] = useState("");
   const [availableCouriers, setAvailableCouriers] = useState<Courier[]>([]);
@@ -85,6 +105,22 @@ export default function ShipmentsPage() {
         );
         setDeliverablePincodes(pins);
         setDeliverableText(pins.join("\n"));
+
+        const globalShippingRate =
+          asNumber(
+            shipments?.globalShippingRate ??
+              data?.globalShippingRate ??
+              data?.shipping?.globalShippingRate
+          ) ?? 0;
+        const freeShippingAbove =
+          asNumber(
+            shipments?.freeShippingAbove ??
+              data?.freeShippingAbove ??
+              data?.shipping?.freeShippingAbove
+          ) ?? 0;
+
+        setGlobalShippingRateText(String(globalShippingRate));
+        setFreeShippingAboveText(String(freeShippingAbove));
       } catch (err: any) {
         setError(err?.message || "Failed to load shipment settings");
       } finally {
@@ -156,14 +192,20 @@ export default function ShipmentsPage() {
     setSavedMsg(null);
     try {
       const pins = deliverableDirty ? listFromText(deliverableText) : deliverablePincodes;
+      const globalRateToSave = parseNonNegativeNumber(globalShippingRateText);
+      const freeAboveToSave = parseNonNegativeNumber(freeShippingAboveText);
       await setDoc(
         doc(db, "siteSettings", "main"),
         {
           shipments: {
             courierWhitelist: whitelist.map((c) => ({ id: c.id, name: c.name })),
             deliverablePincodes: pins,
+            globalShippingRate: globalRateToSave,
+            freeShippingAbove: freeAboveToSave,
           },
           deliverablePincodes: pins,
+          globalShippingRate: globalRateToSave,
+          freeShippingAbove: freeAboveToSave,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
@@ -172,6 +214,8 @@ export default function ShipmentsPage() {
       setDeliverablePincodes(pins);
       setDeliverableText(pins.join("\n"));
       setDeliverableDirty(false);
+      setGlobalShippingRateText(String(globalRateToSave));
+      setFreeShippingAboveText(String(freeAboveToSave));
     } catch (err: any) {
       setError(err?.message || "Failed to save shipment settings");
     } finally {
@@ -202,6 +246,47 @@ export default function ShipmentsPage() {
       {!loading && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+              <div className="mb-4">
+                <h2 className="text-sm font-semibold text-neutral-200">Shipping rates</h2>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Storefront can use these values to calculate shipping and free-shipping eligibility.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm">Global shipping rate</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-neutral-100"
+                    value={globalShippingRateText}
+                    onChange={(e) => setGlobalShippingRateText(e.target.value)}
+                    onBlur={() => setGlobalShippingRateText(String(parseNonNegativeNumber(globalShippingRateText)))}
+                    placeholder="e.g. 99"
+                  />
+                  <div className="mt-1 text-[11px] text-neutral-500">
+                    Applied when a product has no custom shippingRate.
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm">Free shipping above</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-neutral-100"
+                    value={freeShippingAboveText}
+                    onChange={(e) => setFreeShippingAboveText(e.target.value)}
+                    onBlur={() => setFreeShippingAboveText(String(parseNonNegativeNumber(freeShippingAboveText)))}
+                    placeholder="e.g. 999"
+                  />
+                  <div className="mt-1 text-[11px] text-neutral-500">
+                    Set to 0 to disable free shipping threshold.
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <section className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>

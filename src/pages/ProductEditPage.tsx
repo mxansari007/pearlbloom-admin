@@ -11,6 +11,7 @@ import {
   serverTimestamp
 } from "../firebase";
 import AdminLayout from "../layouts/AdminLayout";
+import { deleteField } from "firebase/firestore";
 
 import { getUploadCallable, getDeleteCallable } from "../lib/functions";
 
@@ -50,6 +51,7 @@ type ProductForm = {
   slug: string;
   brand: string;
   price: number;
+  shippingRate?: number | null;
   currency: string;
   shortDescription: string;
   description: string;
@@ -74,6 +76,7 @@ const emptyForm: ProductForm = {
   slug: "",
   brand: "",
   price: 0,
+  shippingRate: null,
   currency: "INR",
   shortDescription: "",
   description: "",
@@ -200,6 +203,12 @@ export default function ProductEditPage() {
             slug: data.slug ?? "",
             brand: data.brand ?? "",
             price: data.price ?? 0,
+            shippingRate:
+              typeof data.shippingRate === "number"
+                ? data.shippingRate
+                : typeof data.shippingRate === "string" && Number.isFinite(Number(data.shippingRate))
+                  ? Number(data.shippingRate)
+                  : null,
             currency: data.currency ?? "INR",
             shortDescription: data.shortDescription ?? "",
             description: data.description ?? data.fullDescription ?? "",
@@ -426,6 +435,11 @@ export default function ProductEditPage() {
           }))
         : [];
 
+      const shippingRateToSave =
+        typeof form.shippingRate === "number" && Number.isFinite(form.shippingRate)
+          ? form.shippingRate
+          : deleteField();
+
       await setDoc(
         productRef,
         {
@@ -433,6 +447,7 @@ export default function ProductEditPage() {
           slug: slugToSave,
           brand: form.brand,
           price: Number(form.price),
+          shippingRate: shippingRateToSave,
           currency: form.currency,
           shortDescription: form.shortDescription,
           description: form.description,
@@ -604,7 +619,7 @@ export default function ProductEditPage() {
         </div>
 
         {/* Price / currency / featured */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div>
             <label className="text-sm">Price</label>
             <input
@@ -613,6 +628,22 @@ export default function ProductEditPage() {
               value={form.price}
               onChange={(e) => handleChange("price", e.target.valueAsNumber)}
               required
+            />
+          </div>
+          <div>
+            <label className="text-sm">Shipping rate (optional)</label>
+            <input
+              type="number"
+              className="mt-1 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm"
+              value={typeof form.shippingRate === "number" ? form.shippingRate : ""}
+              onChange={(e) =>
+                handleChange(
+                  "shippingRate",
+                  Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : null
+                )
+              }
+              min={0}
+              placeholder="Leave blank for global rate"
             />
           </div>
           <div>
