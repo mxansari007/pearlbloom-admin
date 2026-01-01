@@ -28,6 +28,7 @@ type HeroImage = {
 
 type SettingsForm = {
   siteName: string;
+  testMode: boolean;
 
   // Hero
   heroTitle: string;
@@ -57,12 +58,15 @@ type SettingsForm = {
   invoiceQrUrlTemplate: string;
   invoiceNotes: string;
   invoiceBankDetails: string;
+
+  deliverablePincodesText: string;
 };
 
 /* ---------------- Defaults ---------------- */
 
 const emptySettings: SettingsForm = {
   siteName: "Pearl Bloom",
+  testMode: false,
 
   heroTitle: "",
   heroSubtitle: "",
@@ -90,6 +94,8 @@ const emptySettings: SettingsForm = {
   invoiceQrUrlTemplate: "",
   invoiceNotes: "Thank you for shopping with us.\nThis is a computer-generated invoice.",
   invoiceBankDetails: "",
+
+  deliverablePincodesText: "",
 };
 
 export default function SettingsPage() {
@@ -109,9 +115,30 @@ export default function SettingsPage() {
       const snap = await getDoc(doc(db, "siteSettings", "main"));
       if (snap.exists()) {
         const data = snap.data() as any;
+        const shipments = data.shipments ?? {};
+        const pinsRaw =
+          shipments?.deliverablePincodes ??
+          data?.deliverablePincodes ??
+          data?.shipping?.deliverablePincodes ??
+          shipments?.deliverableWhitelist ??
+          data?.deliverableWhitelist ??
+          [];
+        const pins = Array.isArray(pinsRaw)
+          ? Array.from(
+              new Set(
+                pinsRaw
+                  .map((v: any) => String(v ?? "").trim())
+                  .flatMap((v: string) =>
+                    v.split(/[\n,]+/g).map((x) => String(x ?? "").trim())
+                  )
+                  .filter(Boolean)
+              )
+            )
+          : [];
 
         setForm({
           siteName: data.siteName ?? emptySettings.siteName,
+          testMode: !!data.testMode,
 
           heroTitle: data.hero?.title ?? "",
           heroSubtitle: data.hero?.subtitle ?? "",
@@ -148,6 +175,8 @@ export default function SettingsPage() {
           invoiceQrUrlTemplate: data.invoice?.qrUrlTemplate ?? "",
           invoiceNotes: data.invoice?.notes ?? emptySettings.invoiceNotes,
           invoiceBankDetails: data.invoice?.bankDetails ?? "",
+
+          deliverablePincodesText: pins.join("\n"),
         });
       }
       setLoading(false);
@@ -275,10 +304,20 @@ export default function SettingsPage() {
     e.preventDefault();
     setSaving(true);
 
+    const deliverablePincodes = Array.from(
+      new Set(
+        String(form.deliverablePincodesText ?? "")
+          .split(/[\n,]+/g)
+          .map((v) => String(v ?? "").trim())
+          .filter(Boolean)
+      )
+    );
+
     await setDoc(
       doc(db, "siteSettings", "main"),
       {
         siteName: form.siteName,
+        testMode: !!form.testMode,
 
         hero: {
           title: form.heroTitle,
@@ -313,6 +352,11 @@ export default function SettingsPage() {
           bankDetails: form.invoiceBankDetails,
         },
 
+        shipments: {
+          deliverablePincodes,
+        },
+        deliverablePincodes,
+
         updatedAt: serverTimestamp(),
       },
       { merge: true }
@@ -337,6 +381,21 @@ export default function SettingsPage() {
       subtitle="Brand, hero and footer content for the public site."
     >
       <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl">
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+          <h2 className="text-lg font-semibold mb-1">Environment</h2>
+          <p className="text-sm text-neutral-400 mb-4">
+            Test mode can be used by the storefront to disable Pixel and PostHog tracking.
+          </p>
+          <label className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-950/40 px-4 py-3">
+            <span className="text-sm text-neutral-200">Test mode</span>
+            <input
+              type="checkbox"
+              checked={!!form.testMode}
+              onChange={(e) => handleChange("testMode", e.target.checked)}
+              className="h-4 w-4"
+            />
+          </label>
+        </section>
 
         {/* Brand */}
         <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
@@ -345,6 +404,20 @@ export default function SettingsPage() {
             className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
             value={form.siteName}
             onChange={(e) => handleChange("siteName", e.target.value)}
+          />
+        </section>
+
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+          <h2 className="text-lg font-semibold mb-1">Shipping</h2>
+          <p className="text-sm text-neutral-400 mb-4">
+            Deliverable whitelist (pincodes) for the storefront and admin shipments flow.
+          </p>
+          <textarea
+            rows={6}
+            placeholder={"Enter one pincode per line\n110001\n400001\n560001"}
+            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            value={form.deliverablePincodesText}
+            onChange={(e) => handleChange("deliverablePincodesText", e.target.value)}
           />
         </section>
 

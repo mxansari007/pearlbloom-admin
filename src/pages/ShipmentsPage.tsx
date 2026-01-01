@@ -11,6 +11,23 @@ type Courier = {
 
 const normalize = (v: unknown) => String(v ?? "").trim();
 
+const asStringList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const out = value
+    .map((v) => normalize(v))
+    .flatMap((v) => v.split(/[\n,]+/g).map((x) => normalize(x)))
+    .filter(Boolean);
+  return Array.from(new Set(out));
+};
+
+const listFromText = (value: string) => {
+  const out = value
+    .split(/[\n,]+/g)
+    .map((v) => normalize(v))
+    .filter(Boolean);
+  return Array.from(new Set(out));
+};
+
 const asCouriers = (value: unknown): Courier[] => {
   if (!Array.isArray(value)) return [];
   const out: Courier[] = [];
@@ -38,6 +55,9 @@ export default function ShipmentsPage() {
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   const [whitelist, setWhitelist] = useState<Courier[]>([]);
+  const [deliverablePincodes, setDeliverablePincodes] = useState<string[]>([]);
+  const [deliverableText, setDeliverableText] = useState("");
+  const [deliverableDirty, setDeliverableDirty] = useState(false);
 
   const [fetchingCouriers, setFetchingCouriers] = useState(false);
   const [courierQuery, setCourierQuery] = useState("");
@@ -56,6 +76,15 @@ export default function ShipmentsPage() {
         const data = snap.exists() ? (snap.data() as any) : {};
         const shipments = data?.shipments ?? {};
         setWhitelist(asCouriers(shipments?.courierWhitelist));
+        const pins = asStringList(
+          shipments?.deliverablePincodes ??
+            data?.deliverablePincodes ??
+            data?.shipping?.deliverablePincodes ??
+            shipments?.deliverableWhitelist ??
+            data?.deliverableWhitelist
+        );
+        setDeliverablePincodes(pins);
+        setDeliverableText(pins.join("\n"));
       } catch (err: any) {
         setError(err?.message || "Failed to load shipment settings");
       } finally {
@@ -126,17 +155,23 @@ export default function ShipmentsPage() {
     setError(null);
     setSavedMsg(null);
     try {
+      const pins = deliverableDirty ? listFromText(deliverableText) : deliverablePincodes;
       await setDoc(
         doc(db, "siteSettings", "main"),
         {
           shipments: {
             courierWhitelist: whitelist.map((c) => ({ id: c.id, name: c.name })),
+            deliverablePincodes: pins,
           },
+          deliverablePincodes: pins,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
       setSavedMsg("Shipment settings saved.");
+      setDeliverablePincodes(pins);
+      setDeliverableText(pins.join("\n"));
+      setDeliverableDirty(false);
     } catch (err: any) {
       setError(err?.message || "Failed to save shipment settings");
     } finally {
@@ -225,6 +260,59 @@ export default function ShipmentsPage() {
                   </table>
                 </div>
               )}
+            </section>
+
+            <section className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-neutral-200">
+                    Deliverable whitelist (pincodes)
+                  </h2>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Storefront can use this to allow/deny delivery by pincode.
+                  </p>
+                </div>
+                <span className="text-[11px] rounded-full border border-neutral-800 px-3 py-1.5 text-neutral-300">
+                  {(deliverableDirty ? listFromText(deliverableText) : deliverablePincodes).length} pincodes
+                </span>
+              </div>
+
+              <textarea
+                rows={6}
+                value={deliverableText}
+                onChange={(e) => {
+                  setDeliverableText(e.target.value);
+                  setDeliverableDirty(true);
+                }}
+                placeholder={"Enter one pincode per line\n110001\n400001\n560001"}
+                className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm text-neutral-100"
+              />
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pins = deliverableDirty
+                      ? listFromText(deliverableText)
+                      : deliverablePincodes;
+                    setDeliverablePincodes(pins);
+                    setDeliverableText(pins.join("\n"));
+                    setDeliverableDirty(false);
+                  }}
+                  className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-950 transition"
+                >
+                  Normalize
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeliverableText("");
+                    setDeliverableDirty(true);
+                  }}
+                  className="text-[11px] rounded-full border border-red-500/60 px-3 py-1.5 text-red-200 hover:bg-red-500/10 transition"
+                >
+                  Clear
+                </button>
+              </div>
             </section>
 
             <section className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
