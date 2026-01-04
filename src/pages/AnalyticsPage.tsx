@@ -49,6 +49,95 @@ const RANGE_OPTIONS: Array<{ key: RangeKey; label: string; days?: number; hours?
 
 const formatNumber = (n: number) => n.toLocaleString("en-IN");
 
+// Format timestamps in a meaningful way
+const formatTimestamp = (timestamp: string, includeDate = false): string => {
+  if (!timestamp) return "—";
+  
+  try {
+    // Handle ISO format timestamps
+    let dateStr = timestamp;
+    let timeStr = "";
+    
+    if (timestamp.includes("T")) {
+      const [d, t] = timestamp.split("T");
+      dateStr = d;
+      timeStr = t?.slice(0, 5) || "";
+    } else if (timestamp.includes(" ")) {
+      const parts = timestamp.split(" ");
+      dateStr = parts[0];
+      timeStr = parts[1]?.slice(0, 5) || "";
+    }
+    
+    // Parse date
+    const [year, month, day] = dateStr.split("-");
+    if (year && month && day) {
+      const date = new Date(Number(year), Number(month) - 1, Number(day));
+      
+      if (includeDate) {
+        const dateFormatted = date.toLocaleDateString("en-US", { 
+          month: "short", 
+          day: "numeric",
+          year: "2-digit"
+        });
+        return timeStr ? `${dateFormatted} ${timeStr}` : dateFormatted;
+      } else {
+        // Just return time for compact display in tables
+        return timeStr || "—";
+      }
+    }
+  } catch (e) {
+    // Fallback
+  }
+  
+  return timestamp;
+};
+
+// Format relative time (e.g., "2 hours ago")
+const formatRelativeTime = (timestamp: string): string => {
+  if (!timestamp) return "—";
+  
+  try {
+    // Parse timestamp
+    let dateStr = timestamp;
+    let timeStr = "";
+    
+    if (timestamp.includes("T")) {
+      const [d, t] = timestamp.split("T");
+      dateStr = d;
+      timeStr = t?.slice(0, 5) || "";
+    } else if (timestamp.includes(" ")) {
+      const parts = timestamp.split(" ");
+      dateStr = parts[0];
+      timeStr = parts[1] || "";
+    }
+    
+    const [year, month, day] = dateStr.split("-");
+    if (year && month && day) {
+      const date = new Date(Number(year), Number(month) - 1, Number(day), 
+        parseInt(timeStr?.split(":")[0] || "0"), 
+        parseInt(timeStr?.split(":")[1] || "0")
+      );
+      
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return "just now";
+      if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+      if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+      
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    }
+  } catch (e) {
+    // Fallback
+  }
+  
+  return timestamp;
+};
+
 const toLinePoints = (rows: any): TrendPoint[] => {
   const arr: any[] = Array.isArray(rows) ? rows : Array.isArray(rows?.results) ? rows.results : [];
   return arr
@@ -993,7 +1082,7 @@ export default function AnalyticsPage() {
                             </span>
                           </td>
                           <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 hidden sm:table-cell">
-                            {u.last_seen ? String(u.last_seen).split(" ")[0] : "—"}
+                            {u.last_seen ? formatRelativeTime(u.last_seen) : "—"}
                           </td>
                         </tr>
                       ))}
@@ -1046,8 +1135,8 @@ export default function AnalyticsPage() {
                       <tbody className="divide-y divide-neutral-800/40">
                         {selectedEvents.slice(0, 40).map((r, idx) => (
                           <tr key={idx} className="bg-neutral-950/20 hover:bg-neutral-900/30 transition">
-                            <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 whitespace-nowrap">
-                              {r.timestamp?.split(" ")[1] || r.timestamp}
+                            <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 whitespace-nowrap" title={r.timestamp}>
+                              {formatTimestamp(r.timestamp, true)}
                             </td>
                             <td className="px-3 sm:px-4 py-2.5">
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-500/10 text-purple-300">
@@ -1088,8 +1177,8 @@ export default function AnalyticsPage() {
                     <tbody className="divide-y divide-neutral-800/40">
                       {recent.map((r, idx) => (
                         <tr key={idx} className="bg-neutral-950/20 hover:bg-neutral-900/30 transition">
-                          <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 whitespace-nowrap">
-                            {r.timestamp?.split(" ")[1] || r.timestamp}
+                          <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 whitespace-nowrap" title={r.timestamp}>
+                            {formatTimestamp(r.timestamp, true)}
                           </td>
                           <td className="px-3 sm:px-4 py-2.5">
                             <div className="flex flex-col gap-1">
