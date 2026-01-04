@@ -110,15 +110,80 @@ const toRecentEvents = (rows: any): RecentEvent[] => {
 const formatX = (v: any) => {
   const s = String(v ?? "");
   if (!s) return "";
-  if (s.includes(" ")) {
+  
+  // Handle ISO format timestamps (YYYY-MM-DDTHH:MM:SS or with space separator)
+  let dateStr = s;
+  let timeStr = "";
+  
+  if (s.includes("T")) {
+    const [d, t] = s.split("T");
+    dateStr = d;
+    timeStr = t?.slice(0, 5) || "";
+  } else if (s.includes(" ")) {
     const [d, t] = s.split(" ");
-    const time = t?.slice(0, 5);
-    return time ? `${d.slice(5)} ${time}` : d;
+    dateStr = d;
+    timeStr = t?.slice(0, 5) || "";
   }
+  
+  // Parse and format date
+  try {
+    const [year, month, day] = dateStr.split("-");
+    if (year && month && day) {
+      const date = new Date(Number(year), Number(month) - 1, Number(day));
+      const monthShort = date.toLocaleDateString("en-US", { month: "short" });
+      const formatted = `${monthShort} ${Number(day)}`;
+      
+      // Add time if available (for hourly/short-range views)
+      if (timeStr && s.length < 16) { // Only show time for short timestamps (hourly data)
+        return `${formatted} ${timeStr}`;
+      }
+      return formatted;
+    }
+  } catch (e) {
+    // Fallback to original string
+  }
+  
   return s;
 };
 
 function TrendChart({ data }: { data: TrendPoint[] }) {
+  const formatTooltipDate = (dateStr: string) => {
+    try {
+      // Handle ISO format timestamps
+      let d = dateStr;
+      let timeStr = "";
+      
+      if (dateStr.includes("T")) {
+        const [date, time] = dateStr.split("T");
+        d = date;
+        timeStr = time?.slice(0, 5) || "";
+      } else if (dateStr.includes(" ")) {
+        const [date, time] = dateStr.split(" ");
+        d = date;
+        timeStr = time?.slice(0, 5) || "";
+      }
+      
+      const [year, month, day] = d.split("-");
+      if (year && month && day) {
+        const date = new Date(Number(year), Number(month) - 1, Number(day));
+        const formatted = date.toLocaleDateString("en-US", { 
+          weekday: "short", 
+          month: "short", 
+          day: "numeric",
+          year: "numeric"
+        });
+        
+        if (timeStr) {
+          return `${formatted} ${timeStr}`;
+        }
+        return formatted;
+      }
+    } catch (e) {
+      // Fallback
+    }
+    return String(dateStr);
+  };
+
   return (
     <div className="h-40">
       <ResponsiveContainer width="100%" height="100%">
@@ -132,8 +197,8 @@ function TrendChart({ data }: { data: TrendPoint[] }) {
               border: "1px solid rgba(255,255,255,0.12)",
               borderRadius: 12,
             }}
-            labelFormatter={(label) => String(label)}
-            formatter={(value: any) => [formatNumber(Number(value) || 0), "count"]}
+            labelFormatter={(label) => formatTooltipDate(String(label))}
+            formatter={(value: any) => [formatNumber(Number(value) || 0), "Events"]}
           />
           <Line type="monotone" dataKey="count" stroke="#facc15" strokeWidth={2} dot={false} />
         </RLineChart>
