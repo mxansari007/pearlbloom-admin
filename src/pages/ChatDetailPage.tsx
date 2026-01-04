@@ -40,9 +40,25 @@ const composeName = (obj: any): string | undefined => {
   return finalName && finalName.trim().length ? finalName : undefined;
 };
 
+const MessageBubbleSkeleton = ({ isAdmin }: { isAdmin: boolean }) => (
+  <div className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`
+        max-w-[55%] h-10 px-3 py-2 text-sm rounded-2xl animate-pulse
+        ${
+          isAdmin
+            ? "bg-neutral-700 rounded-br-sm"
+            : "bg-neutral-800 rounded-bl-sm"
+        }
+      `}
+    />
+  </div>
+);
+
 export default function ChatDetailPage() {
   const { chatId } = useParams();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [user, setUser] = useState<ChatUser>({
     name: "Guest User",
@@ -119,8 +135,13 @@ export default function ChatDetailPage() {
       orderBy("createdAt")
     );
 
+    let initialLoad = true;
     return onSnapshot(q, (snap) => {
       setMessages(snap.docs.map((d) => d.data() as Message));
+      if (initialLoad) {
+        setLoading(false);
+        initialLoad = false;
+      }
     });
   }, [chatId]);
 
@@ -162,80 +183,121 @@ export default function ChatDetailPage() {
     );
   };
 
+  const initials = user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+
   return (
     <ProtectedRoute>
-      <AdminLayout title="Chat">
+      <AdminLayout 
+        title="Chat"
+        actions={
+          <Link
+            to="/chats"
+            className="text-[11px] rounded-xl border border-neutral-700 px-3 py-1.5 text-neutral-300 hover:bg-neutral-800 transition"
+          >
+            ← Back to chats
+          </Link>
+        }
+      >
         <div className="max-w-4xl mx-auto space-y-4">
           {/* USER INFO */}
-          <div className="border border-white/10 rounded-lg p-4 bg-neutral-900">
-            <p className="text-xs text-neutral-400 uppercase tracking-wide">
-              Customer
-            </p>
-
-            <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <p className="font-medium">{user.name}</p>
-                <p className="text-sm text-neutral-400">{user.phone}</p>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500/20 to-amber-500/10 border border-yellow-500/30 flex items-center justify-center text-sm font-semibold text-yellow-300">
+                  {initials || "?"}
+                </div>
+                <div>
+                  <p className="font-semibold text-white">{user.name}</p>
+                  <p className="text-sm text-neutral-400">{user.phone}</p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
                 {user.userId && (
                   <Link
                     to={`/users/${user.userId}`}
-                    className="text-[11px] rounded-full border border-yellow-500/60 px-3 py-1.5 text-yellow-200 hover:bg-yellow-500/10 transition"
+                    className="text-[11px] rounded-xl border border-yellow-500/40 px-3 py-1.5 text-yellow-200 hover:bg-yellow-500/10 transition font-medium"
                   >
-                    View user
+                    👤 View profile
                   </Link>
                 )}
-                <p className="text-xs text-neutral-500">Chat ID: {chatId}</p>
+                <span className="text-[10px] text-neutral-600 bg-neutral-800 px-2 py-1 rounded font-mono">
+                  ID: {chatId?.slice(0, 8)}...
+                </span>
               </div>
             </div>
           </div>
 
           {/* MESSAGES */}
-          <div className="h-[60vh] overflow-y-auto space-y-3 border border-white/10 p-4 rounded bg-neutral-900">
-            {messages.map((m, i) => {
-              const isAdmin = m.sender === "admin";
+          <div className="h-[55vh] sm:h-[60vh] overflow-y-auto space-y-3 rounded-xl border border-neutral-800 bg-neutral-950/60 p-4 sm:p-5">
+            {loading ? (
+              <>
+                <MessageBubbleSkeleton isAdmin={false} />
+                <MessageBubbleSkeleton isAdmin={true} />
+                <MessageBubbleSkeleton isAdmin={false} />
+                <MessageBubbleSkeleton isAdmin={false} />
+                <MessageBubbleSkeleton isAdmin={true} />
+              </>
+            ) : messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <div className="text-4xl mb-3 opacity-40">💬</div>
+                <p className="text-sm text-neutral-400">No messages yet</p>
+                <p className="text-xs text-neutral-500 mt-1">Send a message to start the conversation</p>
+              </div>
+            ) : (
+              messages.map((m, i) => {
+                const isAdmin = m.sender === "admin";
+                const time = m.createdAt?.toDate?.().toLocaleTimeString("en-IN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }) || "";
 
-              return (
-                <div
-                  key={i}
-                  className={`flex ${
-                    isAdmin ? "justify-end" : "justify-start"
-                  }`}
-                >
+                return (
                   <div
-                    className={`
-                      max-w-[75%] px-3 py-2 text-sm rounded-2xl
-                      ${
-                        isAdmin
-                          ? "bg-yellow-500 text-black rounded-br-sm"
-                          : "bg-neutral-800 text-neutral-200 rounded-bl-sm"
-                      }
-                    `}
+                    key={i}
+                    className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}
                   >
-                    {m.text}
+                    <div className={`max-w-[80%] sm:max-w-[70%] ${isAdmin ? "text-right" : "text-left"}`}>
+                      <div
+                        className={`
+                          inline-block px-4 py-2.5 text-sm rounded-2xl leading-relaxed
+                          ${
+                            isAdmin
+                              ? "bg-gradient-to-r from-yellow-500 to-amber-500 text-black rounded-br-sm"
+                              : "bg-neutral-800/80 text-neutral-200 rounded-bl-sm border border-neutral-700/50"
+                          }
+                        `}
+                      >
+                        {m.text}
+                      </div>
+                      {time && (
+                        <p className={`text-[10px] text-neutral-500 mt-1 ${isAdmin ? "text-right pr-1" : "text-left pl-1"}`}>
+                          {time}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
             <div ref={bottomRef} />
           </div>
 
           {/* INPUT */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 sm:gap-3">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              className="flex-1 bg-neutral-800 px-3 py-2 rounded"
-              placeholder="Reply..."
+              className="flex-1 bg-neutral-900/60 border border-neutral-700 px-4 py-3 rounded-xl text-sm placeholder:text-neutral-500 focus:outline-none focus:border-yellow-500/50 transition"
+              placeholder="Type your reply..."
               onKeyDown={(e) => e.key === "Enter" && send()}
             />
             <button
               onClick={send}
-              className="bg-yellow-500 text-black px-4 rounded font-medium"
+              disabled={!input.trim()}
+              className="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black px-5 sm:px-6 rounded-xl font-semibold text-sm disabled:opacity-50 transition-all shadow-lg shadow-yellow-500/20 disabled:shadow-none"
             >
-              Send
+              Send →
             </button>
           </div>
         </div>

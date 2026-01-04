@@ -13,7 +13,6 @@ const nimbuspost_1 = require("./lib/nimbuspost");
  * secrets are declared here so runtime will inject them.
  */
 exports.uploadImageCallable = (0, https_1.onCall)({
-    secrets: ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"],
     region: "us-central1",
 }, async (req) => {
     try {
@@ -32,7 +31,6 @@ exports.uploadImageCallable = (0, https_1.onCall)({
  * onCall: deleteImage
  */
 exports.deleteImageCallable = (0, https_1.onCall)({
-    secrets: ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"],
     region: "us-central1",
 }, async (req) => {
     try {
@@ -80,7 +78,6 @@ async function posthogQuery(opts) {
     return json;
 }
 exports.posthogReportCallable = (0, https_1.onCall)({
-    secrets: ["POSTHOG_PERSONAL_API_KEY", "POSTHOG_PROJECT_ID", "POSTHOG_HOST"],
     region: "us-central1",
     cors: true,
     invoker: "public",

@@ -16,6 +16,8 @@ function getAllowedOrigins() {
         "http://localhost:3000",
         `https://${project}.web.app`,
         `https://${project}.firebaseapp.com`,
+        "https://admin.pearlbloom.in",
+        "https://pearlbloom.in",
     ].filter(Boolean);
 }
 /**

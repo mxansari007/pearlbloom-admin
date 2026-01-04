@@ -1,8 +1,13 @@
 // src/pages/DashboardPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { db, collection, getDocs, query, where } from "../firebase";
+import { db, collection, query, where } from "../firebase";
+import { getCountFromServer } from "firebase/firestore";
 import AdminLayout from "../layouts/AdminLayout";
+import { getCached } from "../lib/cache";
+
+// Cache TTL for dashboard counts (5 minutes)
+const CACHE_TTL_DASHBOARD = 5 * 60 * 1000;
 
 export default function DashboardPage() {
   const [productCount, setProductCount] = useState(0);
@@ -31,22 +36,38 @@ export default function DashboardPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [prodSnap, collSnap, revSnap, subsSnap, featuredSnap] =
-          await Promise.all([
-            getDocs(collection(db, "products")),
-            getDocs(collection(db, "collections")),
-            getDocs(collection(db, "reviews")),
-            getDocs(collection(db, "newsletterSubscribers")),
-            getDocs(
-              query(collection(db, "products"), where("isFeatured", "==", true))
-            ),
-          ]);
+        // Use cached counts to reduce Firestore reads
+        const counts = await getCached(
+          "dashboard:counts",
+          async () => {
+            // Use getCountFromServer for efficient counting (1 read per query instead of N reads)
+            const [prodCount, collCount, revCount, subsCount, featCount] =
+              await Promise.all([
+                getCountFromServer(collection(db, "products")),
+                getCountFromServer(collection(db, "collections")),
+                getCountFromServer(collection(db, "reviews")),
+                getCountFromServer(collection(db, "newsletterSubscribers")),
+                getCountFromServer(
+                  query(collection(db, "products"), where("isFeatured", "==", true))
+                ),
+              ]);
 
-        setProductCount(prodSnap.size);
-        setCollectionCount(collSnap.size);
-        setReviewCount(revSnap.size);
-        setSubscriberCount(subsSnap.size);
-        setFeaturedCount(featuredSnap.size);
+            return {
+              products: prodCount.data().count,
+              collections: collCount.data().count,
+              reviews: revCount.data().count,
+              subscribers: subsCount.data().count,
+              featured: featCount.data().count,
+            };
+          },
+          CACHE_TTL_DASHBOARD
+        );
+
+        setProductCount(counts.products);
+        setCollectionCount(counts.collections);
+        setReviewCount(counts.reviews);
+        setSubscriberCount(counts.subscribers);
+        setFeaturedCount(counts.featured);
       } finally {
         setLoading(false);
       }
@@ -95,16 +116,16 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="mb-8">
+      {/* Stats - 2 cols on mobile, 4 on desktop */}
+      <section className="mb-6 sm:mb-8">
         {loading ? (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
         ) : (
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <StatCard
               label="Products"
               value={productCount}
@@ -138,14 +159,15 @@ export default function DashboardPage() {
       </section>
 
       {/* Insights + quick actions */}
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)]">
+      <section className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)]">
         {/* Insights */}
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">Store insights</h3>
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <span>📊</span> Store Insights
+            </h3>
             {!loading && (
-              <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500">
-                Auto ·{" "}
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-neutral-500 bg-neutral-800/50 px-2 py-1 rounded-full">
                 {now.toLocaleTimeString("en-IN", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -155,29 +177,28 @@ export default function DashboardPage() {
           </div>
 
           {loading ? (
-            <p className="text-xs text-neutral-500">Calculating insights…</p>
+            <InsightsSkeleton />
           ) : (
             <>
-              <div className="mb-4">
-                <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
-                  <span>Featured coverage</span>
-                  <span>{featuredPercent}% of catalogue</span>
+              <div className="mb-5 p-3 sm:p-4 rounded-xl bg-neutral-900/50 border border-neutral-800/50">
+                <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
+                  <span className="font-medium">Featured Coverage</span>
+                  <span className="text-yellow-300 font-semibold">{featuredPercent}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-neutral-800 overflow-hidden">
+                <div className="h-2.5 rounded-full bg-neutral-800 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-yellow-500 via-amber-400 to-emerald-300 transition-[width] duration-500"
-                    style={{ width: `${featuredPercent}%` }}
+                    className="h-full bg-gradient-to-r from-yellow-500 via-amber-400 to-emerald-400 transition-all duration-700 ease-out"
+                    style={{ width: `${Math.max(featuredPercent, 2)}%` }}
                   />
                 </div>
-                <p className="mt-1.5 text-[11px] text-neutral-500">
-                  Aim for 20–40% of products as “featured” to keep the homepage
-                  focused but varied.
+                <p className="mt-2 text-[10px] sm:text-[11px] text-neutral-500">
+                  Aim for 20–40% featured products for a focused homepage.
                 </p>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3 text-[11px]">
+              <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-3">
                 <InsightPill
-                  title="Catalogue size"
+                  title="Catalogue"
                   value={
                     productCount === 0
                       ? "Empty"
@@ -187,34 +208,34 @@ export default function DashboardPage() {
                   }
                   hint={
                     productCount < 10
-                      ? "Add a few more signature pieces."
-                      : "Consider grouping by themes."
+                      ? "Add more pieces"
+                      : "Group by themes"
                   }
                 />
                 <InsightPill
-                  title="Collection balance"
+                  title="Balance"
                   value={
                     avgProductsPerCollection === "—"
-                      ? "No collections"
+                      ? "—"
                       : `${avgProductsPerCollection} avg`
                   }
                   hint={
                     avgProductsPerCollection === "—"
-                      ? "Create at least 3 collections."
-                      : "Keep them in a similar range."
+                      ? "Create collections"
+                      : "Keep similar range"
                   }
                 />
                 <InsightPill
                   title="Engagement"
                   value={
                     reviewCount === 0
-                      ? "No reviews yet"
+                      ? "No reviews"
                       : `${reviewCount} review${reviewCount > 1 ? "s" : ""}`
                   }
                   hint={
                     reviewCount === 0
-                      ? "Add a few starter reviews."
-                      : "Surface best reviews on product pages."
+                      ? "Add starter reviews"
+                      : "Surface best ones"
                   }
                 />
               </div>
@@ -223,31 +244,37 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick actions */}
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Quick actions</h3>
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6">
+          <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+            <span>⚡</span> Quick Actions
+          </h3>
+          <div className="space-y-2 sm:space-y-3">
+            <QuickAction
+              to="/products/new"
+              title="Add a new piece"
+              description="Create product with images & pricing"
+              badge="5 min"
+              icon="✨"
+            />
+            <QuickAction
+              to="/collections"
+              title="Tune collections"
+              description="Reorganize categories"
+              icon="🏷️"
+            />
+            <QuickAction
+              to="/homepage"
+              title="Refresh homepage"
+              description="Update featured items"
+              icon="🏠"
+            />
+            <QuickAction
+              to="/settings"
+              title="Brand & footer"
+              description="Contact & brand story"
+              icon="⚙️"
+            />
           </div>
-          <QuickAction
-            to="/products/new"
-            title="Add a new piece"
-            description="Create a product with images, pricing and metadata."
-            badge="5 min"
-          />
-          <QuickAction
-            to="/collections"
-            title="Tune collections"
-            description="Reorganize engagement, necklaces, earrings & more."
-          />
-          <QuickAction
-            to="/homepage"
-            title="Refresh homepage"
-            description="Swap featured items and update hero copy."
-          />
-          <QuickAction
-            to="/settings"
-            title="Brand & footer"
-            description="Update contact details and brand story."
-          />
         </div>
       </section>
     </AdminLayout>
@@ -265,6 +292,45 @@ function SkeletonCard() {
   );
 }
 
+const InsightsSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="h-4 bg-neutral-700 rounded w-1/2 mb-4"></div>
+    <div className="h-2 bg-neutral-700 rounded-full w-full mb-2"></div>
+    <div className="h-3 bg-neutral-700 rounded w-3/4 mb-6"></div>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
+        <div className="h-3 bg-neutral-700 rounded w-1/2 mb-2"></div>
+        <div className="h-4 bg-neutral-700 rounded w-3/4 mb-1"></div>
+        <div className="h-3 bg-neutral-700 rounded w-full"></div>
+      </div>
+      <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
+        <div className="h-3 bg-neutral-700 rounded w-1/2 mb-2"></div>
+        <div className="h-4 bg-neutral-700 rounded w-3/4 mb-1"></div>
+        <div className="h-3 bg-neutral-700 rounded w-full"></div>
+      </div>
+      <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
+        <div className="h-3 bg-neutral-700 rounded w-1/2 mb-2"></div>
+        <div className="h-4 bg-neutral-700 rounded w-3/4 mb-1"></div>
+        <div className="h-3 bg-neutral-700 rounded w-full"></div>
+      </div>
+    </div>
+  </div>
+);
+
+const STAT_ICONS: Record<string, string> = {
+  Products: "📦",
+  Collections: "🏷️",
+  Reviews: "⭐",
+  Subscribers: "💌",
+};
+
+const STAT_ACCENTS: Record<string, string> = {
+  Products: "from-purple-500/20",
+  Collections: "from-blue-500/20",
+  Reviews: "from-amber-500/20",
+  Subscribers: "from-emerald-500/20",
+};
+
 function StatCard({
   label,
   value,
@@ -274,17 +340,26 @@ function StatCard({
   value: number;
   helper?: string;
 }) {
+  const icon = STAT_ICONS[label] || "📊";
+  const accent = STAT_ACCENTS[label] || "from-neutral-500/20";
+
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 px-4 py-4 hover:border-yellow-500/60 hover:-translate-y-[1px] transition">
-      <p className="text-[11px] uppercase tracking-[0.16em] text-neutral-500">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-      {helper && (
-        <p className="mt-1 text-xs text-neutral-400 leading-snug">
-          {helper}
-        </p>
-      )}
+    <div className={`relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4 sm:p-5 hover:border-yellow-500/50 hover:scale-[1.02] hover:shadow-lg hover:shadow-black/20 transition-all duration-200`}>
+      <div className={`absolute inset-0 bg-gradient-to-br ${accent} to-transparent pointer-events-none`} />
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] sm:text-[11px] uppercase tracking-wider text-neutral-500 font-medium">
+            {label}
+          </p>
+          <span className="text-base sm:text-lg opacity-60">{icon}</span>
+        </div>
+        <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{value.toLocaleString()}</p>
+        {helper && (
+          <p className="mt-1.5 text-[10px] sm:text-xs text-neutral-400 leading-snug">
+            {helper}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -299,12 +374,12 @@ function InsightPill({
   hint: string;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-[0.16em] text-neutral-500 mb-1">
+    <div className="rounded-xl border border-neutral-800/60 bg-neutral-900/40 px-3 py-2.5 hover:bg-neutral-900/60 transition">
+      <p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-neutral-500 mb-1 font-medium">
         {title}
       </p>
-      <p className="text-xs font-medium text-neutral-50">{value}</p>
-      <p className="mt-0.5 text-[10px] text-neutral-500">{hint}</p>
+      <p className="text-xs sm:text-sm font-semibold text-neutral-100">{value}</p>
+      <p className="mt-0.5 text-[9px] sm:text-[10px] text-neutral-500">{hint}</p>
     </div>
   );
 }
@@ -314,32 +389,34 @@ function QuickAction({
   title,
   description,
   badge,
+  icon = "→",
 }: {
   to: string;
   title: string;
   description: string;
   badge?: string;
+  icon?: string;
 }) {
   return (
     <Link
       to={to}
-      className="group flex items-start gap-3 rounded-xl border border-neutral-800 bg-neutral-950/60 px-3 py-3 hover:border-yellow-500/70 hover:bg-neutral-900/80 transition"
+      className="group flex items-center gap-3 rounded-xl border border-neutral-800/60 bg-neutral-900/30 px-3 py-3 hover:border-yellow-500/50 hover:bg-neutral-900/60 transition-all duration-200"
     >
-      <div className="mt-1 h-6 w-6 rounded-full bg-yellow-500/10 border border-yellow-500/50 flex items-center justify-center text-[10px] text-yellow-300">
-        →
+      <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center text-sm group-hover:bg-yellow-500/20 group-hover:scale-110 transition-all">
+        {icon}
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <h4 className="text-sm font-medium group-hover:text-yellow-100">
+          <h4 className="text-xs sm:text-sm font-medium group-hover:text-yellow-100 transition truncate">
             {title}
           </h4>
           {badge && (
-            <span className="text-[10px] rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300">
+            <span className="text-[9px] sm:text-[10px] rounded-full bg-yellow-500/10 text-yellow-300 px-2 py-0.5 flex-shrink-0">
               {badge}
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-xs text-neutral-400">{description}</p>
+        <p className="text-[10px] sm:text-xs text-neutral-500 truncate">{description}</p>
       </div>
     </Link>
   );

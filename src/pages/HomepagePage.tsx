@@ -100,6 +100,53 @@ const makeDefaultCarouselForm = (placement: BannerPlacement): BannerCarouselForm
   ],
 });
 
+const CarouselFormSkeleton = () => (
+  <div className="mt-5 animate-pulse">
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-950/30 p-5 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="h-6 bg-neutral-700 rounded w-1/4"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      </div>
+    </div>
+  </div>
+);
+
+/* ---------------- Defaults ---------------- */
+
+const CarouselFormSkeleton2 = () => (
+  <div className="mt-5 animate-pulse">
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-950/30 p-5 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="h-6 bg-neutral-700 rounded w-1/4"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      </div>
+    </div>
+  </div>
+);
+
+const SectionRowSkeleton = () => (
+  <div className="flex justify-between items-start rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm animate-pulse">
+    <div>
+      <div className="h-5 bg-neutral-700 rounded w-48 mb-2"></div>
+      <div className="h-4 bg-neutral-700 rounded w-32"></div>
+    </div>
+    <div className="flex gap-2">
+      <div className="h-6 w-16 bg-neutral-700 rounded-full"></div>
+      <div className="h-6 w-16 bg-neutral-700 rounded-full"></div>
+    </div>
+  </div>
+);
+
 /* ---------------- Defaults ---------------- */
 
 const emptyForm = {
@@ -111,6 +158,7 @@ const emptyForm = {
 
 export default function HomepagePage() {
   const [sections, setSections] = useState<Section[]>([]);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -134,13 +182,18 @@ export default function HomepagePage() {
 
   useEffect(() => {
     (async () => {
-      const snap = await getDocs(collection(db, "homepageSections"));
-      const items: Section[] = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as any),
-      }));
-      items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-      setSections(items);
+      setLoading(true);
+      try {
+        const snap = await getDocs(collection(db, "homepageSections"));
+        const items: Section[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as any),
+        }));
+        items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        setSections(items);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -439,9 +492,7 @@ export default function HomepagePage() {
         </div>
 
         {carouselLoading ? (
-          <div className="mt-5 rounded-xl border border-neutral-800 bg-neutral-950/30 p-4 text-sm text-neutral-400">
-            Loading carousel…
-          </div>
+          <CarouselFormSkeleton />
         ) : (
           <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
@@ -888,7 +939,8 @@ export default function HomepagePage() {
 
       {/* LIST */}
       <div className="space-y-3">
-        {sections.map((s) => (
+        {loading && Array.from({ length: 3 }).map((_, i) => <SectionRowSkeleton key={i} />)}
+        {!loading && sections.map((s) => (
           <div
             key={s.id}
             className="flex justify-between items-start rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm"

@@ -98,6 +98,32 @@ const emptySettings: SettingsForm = {
   deliverablePincodesText: "",
 };
 
+const SettingsPageSkeleton = () => (
+  <div className="space-y-8 max-w-4xl animate-pulse">
+    {/* Brand */}
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+      <div className="h-6 bg-neutral-700 rounded w-1/4 mb-3"></div>
+      <div className="h-9 bg-neutral-800 rounded w-full"></div>
+    </div>
+    {/* Hero */}
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4">
+      <div className="h-6 bg-neutral-700 rounded w-1/4 mb-3"></div>
+      <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      <div className="h-20 bg-neutral-800 rounded w-full"></div>
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      </div>
+    </div>
+    {/* Footer */}
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4">
+      <div className="h-6 bg-neutral-700 rounded w-1/4 mb-3"></div>
+      <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      <div className="h-20 bg-neutral-800 rounded w-full"></div>
+    </div>
+  </div>
+);
+
 export default function SettingsPage() {
   const [form, setForm] = useState<SettingsForm>(emptySettings);
   const [loading, setLoading] = useState(true);
@@ -368,7 +394,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <AdminLayout title="Settings" subtitle="Brand, hero and footer content.">
-        <p className="text-sm text-neutral-400">Loading settings…</p>
+        <SettingsPageSkeleton />
       </AdminLayout>
     );
   }
@@ -380,178 +406,220 @@ export default function SettingsPage() {
       title="Settings"
       subtitle="Brand, hero and footer content for the public site."
     >
-      <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl">
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-          <h2 className="text-lg font-semibold mb-1">Environment</h2>
-          <p className="text-sm text-neutral-400 mb-4">
-            Test mode can be used by the storefront to disable Pixel and PostHog tracking.
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 max-w-4xl">
+        {/* Environment */}
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">🧪</span>
+            <h2 className="text-base sm:text-lg font-semibold">Environment</h2>
+          </div>
+          <p className="text-xs sm:text-sm text-neutral-400 mb-4">
+            Test mode disables Pixel and PostHog tracking on storefront.
           </p>
-          <label className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-950/40 px-4 py-3">
-            <span className="text-sm text-neutral-200">Test mode</span>
+          <label className="flex items-center justify-between gap-4 rounded-xl border border-neutral-700/60 bg-neutral-900/40 px-4 py-3 cursor-pointer hover:border-yellow-500/40 transition">
+            <div className="flex items-center gap-2">
+              <span className="text-neutral-300 text-sm">Test mode</span>
+              {form.testMode && (
+                <span className="text-[10px] bg-amber-500/15 text-amber-300 px-2 py-0.5 rounded-full">Active</span>
+              )}
+            </div>
             <input
               type="checkbox"
               checked={!!form.testMode}
               onChange={(e) => handleChange("testMode", e.target.checked)}
-              className="h-4 w-4"
+              className="h-4 w-4 rounded accent-yellow-500"
             />
           </label>
         </section>
 
         {/* Brand */}
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-          <h2 className="text-lg font-semibold mb-3">Brand</h2>
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">✨</span>
+            <h2 className="text-base sm:text-lg font-semibold">Brand</h2>
+          </div>
+          <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Site Name</label>
           <input
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
             value={form.siteName}
             onChange={(e) => handleChange("siteName", e.target.value)}
           />
         </section>
 
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-          <h2 className="text-lg font-semibold mb-1">Shipping</h2>
-          <p className="text-sm text-neutral-400 mb-4">
-            Deliverable whitelist (pincodes) for the storefront and admin shipments flow.
+        {/* Shipping */}
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">📦</span>
+            <h2 className="text-base sm:text-lg font-semibold">Shipping</h2>
+          </div>
+          <p className="text-xs sm:text-sm text-neutral-400 mb-4">
+            Deliverable pincodes for storefront and shipments.
           </p>
+          <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Pincode Whitelist</label>
           <textarea
-            rows={6}
-            placeholder={"Enter one pincode per line\n110001\n400001\n560001"}
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+            rows={5}
+            placeholder={"110001\n400001\n560001"}
+            className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition resize-none font-mono"
             value={form.deliverablePincodesText}
             onChange={(e) => handleChange("deliverablePincodesText", e.target.value)}
           />
+          <p className="text-[10px] text-neutral-500 mt-1.5">One pincode per line</p>
         </section>
 
         {/* Hero */}
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4">
-          <h2 className="text-lg font-semibold">Hero section</h2>
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🏠</span>
+            <h2 className="text-base sm:text-lg font-semibold">Hero Section</h2>
+          </div>
 
-          <input
-            placeholder="Hero title"
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.heroTitle}
-            onChange={(e) => handleChange("heroTitle", e.target.value)}
-          />
-
-          <textarea
-            rows={3}
-            placeholder="Hero subtitle"
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.heroSubtitle}
-            onChange={(e) => handleChange("heroSubtitle", e.target.value)}
-          />
-
-          <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Title</label>
             <input
-              placeholder="CTA label"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.heroCtaLabel}
-              onChange={(e) =>
-                handleChange("heroCtaLabel", e.target.value)
-              }
-            />
-            <input
-              placeholder="CTA link"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.heroCtaLink}
-              onChange={(e) =>
-                handleChange("heroCtaLink", e.target.value)
-              }
+              placeholder="Welcome to Pearl Bloom"
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+              value={form.heroTitle}
+              onChange={(e) => handleChange("heroTitle", e.target.value)}
             />
           </div>
 
           <div>
-            <label className="text-sm">Hero image (Cloudinary)</label>
-            <input
-              type="file"
-              accept="image/*"
-              className="mt-1 block text-sm"
-              onChange={handleHeroImageUpload}
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Subtitle</label>
+            <textarea
+              rows={2}
+              placeholder="Exquisite jewelry for every occasion..."
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition resize-none"
+              value={form.heroSubtitle}
+              onChange={(e) => handleChange("heroSubtitle", e.target.value)}
             />
+          </div>
 
-            {uploadingHero && (
-              <p className="text-xs text-neutral-400 mt-1">
-                Uploading image…
-              </p>
-            )}
-
-            {form.heroImage?.url && (
-              <img
-                src={form.heroImage.url}
-                alt="Hero"
-                className="mt-3 h-40 rounded-xl object-cover border border-neutral-700"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">CTA Label</label>
+              <input
+                placeholder="Explore Collection"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.heroCtaLabel}
+                onChange={(e) => handleChange("heroCtaLabel", e.target.value)}
               />
-            )}
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">CTA Link</label>
+              <input
+                placeholder="/collections/featured"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.heroCtaLink}
+                onChange={(e) => handleChange("heroCtaLink", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-2 block">Hero Image</label>
+            <div className="flex items-start gap-4">
+              {form.heroImage?.url ? (
+                <img
+                  src={form.heroImage.url}
+                  alt="Hero"
+                  className="h-24 sm:h-32 rounded-xl object-cover border border-neutral-700"
+                />
+              ) : (
+                <div className="h-24 sm:h-32 w-32 sm:w-40 rounded-xl bg-neutral-800 flex items-center justify-center text-3xl border border-dashed border-neutral-600">
+                  🖼️
+                </div>
+              )}
+              <div>
+                <label className="inline-flex items-center gap-2 cursor-pointer bg-neutral-800 hover:bg-neutral-700 px-3 py-2 rounded-xl text-xs transition">
+                  <span>{form.heroImage?.url ? "Replace image" : "Choose file"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleHeroImageUpload}
+                  />
+                </label>
+                {uploadingHero && (
+                  <p className="text-[10px] text-yellow-400 mt-2 animate-pulse">Uploading…</p>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
         {/* Footer */}
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4">
-          <h2 className="text-lg font-semibold">Footer</h2>
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🦶</span>
+            <h2 className="text-base sm:text-lg font-semibold">Footer</h2>
+          </div>
 
-          <input
-            placeholder="Brand title"
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.footerBrandTitle}
-            onChange={(e) =>
-              handleChange("footerBrandTitle", e.target.value)
-            }
-          />
-
-          <textarea
-            rows={3}
-            placeholder="Brand description"
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.footerBrandDescription}
-            onChange={(e) =>
-              handleChange("footerBrandDescription", e.target.value)
-            }
-          />
-
-          <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Brand Title</label>
             <input
-              placeholder="Contact email"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.contactEmail}
-              onChange={(e) =>
-                handleChange("contactEmail", e.target.value)
-              }
-            />
-            <input
-              placeholder="Contact phone"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.contactPhone}
-              onChange={(e) =>
-                handleChange("contactPhone", e.target.value)
-              }
+              placeholder="Pearl Bloom"
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+              value={form.footerBrandTitle}
+              onChange={(e) => handleChange("footerBrandTitle", e.target.value)}
             />
           </div>
 
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Brand Description</label>
+            <textarea
+              rows={2}
+              placeholder="Exquisite jewelry crafted with love..."
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition resize-none"
+              value={form.footerBrandDescription}
+              onChange={(e) => handleChange("footerBrandDescription", e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Contact Email</label>
+              <input
+                placeholder="hello@pearlbloom.in"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.contactEmail}
+                onChange={(e) => handleChange("contactEmail", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Contact Phone</label>
+              <input
+                placeholder="+91 98765 43210"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.contactPhone}
+                onChange={(e) => handleChange("contactPhone", e.target.value)}
+              />
+            </div>
+          </div>
+
           {/* Footer links */}
-          <div className="space-y-3">
-            <p className="text-sm font-medium">Footer links</p>
+          <div className="space-y-3 pt-2">
+            <p className="text-xs sm:text-sm font-medium flex items-center gap-2">
+              <span>🔗</span> Footer Links
+            </p>
 
             {form.footerLinks.map((link, i) => (
-              <div key={i} className="flex gap-2">
+              <div key={i} className="flex flex-col sm:flex-row gap-2">
                 <input
                   placeholder="Label"
-                  className="flex-1 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+                  className="flex-1 rounded-xl bg-neutral-900/60 border border-neutral-700 px-3 py-2 text-sm focus:outline-none focus:border-yellow-500/50 transition"
                   value={link.label}
-                  onChange={(e) =>
-                    updateFooterLink(i, "label", e.target.value)
-                  }
+                  onChange={(e) => updateFooterLink(i, "label", e.target.value)}
                 />
                 <input
                   placeholder="/collections"
-                  className="flex-1 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+                  className="flex-1 rounded-xl bg-neutral-900/60 border border-neutral-700 px-3 py-2 text-sm focus:outline-none focus:border-yellow-500/50 transition"
                   value={link.href}
-                  onChange={(e) =>
-                    updateFooterLink(i, "href", e.target.value)
-                  }
+                  onChange={(e) => updateFooterLink(i, "href", e.target.value)}
                 />
                 <button
                   type="button"
                   onClick={() => removeFooterLink(i)}
-                  className="px-3 rounded-lg bg-red-600/70 text-xs"
+                  className="px-3 py-2 rounded-xl bg-red-600/20 text-red-400 hover:bg-red-600/30 text-xs transition"
                 >
                   ✕
                 </button>
@@ -561,24 +629,24 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={addFooterLink}
-              className="text-xs px-3 py-1 rounded-lg bg-neutral-800"
+              className="text-[11px] px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition"
             >
               + Add link
             </button>
           </div>
 
           {/* Social media */}
-          <div className="space-y-3">
-            <p className="text-sm font-medium">Social media</p>
+          <div className="space-y-3 pt-2">
+            <p className="text-xs sm:text-sm font-medium flex items-center gap-2">
+              <span>📱</span> Social Media
+            </p>
 
             {form.socialLinks.map((social, i) => (
-              <div key={i} className="flex gap-2">
+              <div key={i} className="flex flex-col sm:flex-row gap-2">
                 <select
-                  className="rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-2 text-sm"
+                  className="rounded-xl bg-neutral-900/60 border border-neutral-700 px-3 py-2 text-sm focus:outline-none focus:border-yellow-500/50 transition"
                   value={social.platform}
-                  onChange={(e) =>
-                    updateSocialLink(i, "platform", e.target.value)
-                  }
+                  onChange={(e) => updateSocialLink(i, "platform", e.target.value)}
                 >
                   <option value="instagram">Instagram</option>
                   <option value="facebook">Facebook</option>
@@ -589,17 +657,15 @@ export default function SettingsPage() {
 
                 <input
                   placeholder="https://instagram.com/pearlbloom"
-                  className="flex-1 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
+                  className="flex-1 rounded-xl bg-neutral-900/60 border border-neutral-700 px-3 py-2 text-sm focus:outline-none focus:border-yellow-500/50 transition"
                   value={social.url}
-                  onChange={(e) =>
-                    updateSocialLink(i, "url", e.target.value)
-                  }
+                  onChange={(e) => updateSocialLink(i, "url", e.target.value)}
                 />
 
                 <button
                   type="button"
                   onClick={() => removeSocialLink(i)}
-                  className="px-3 rounded-lg bg-red-600/70 text-xs"
+                  className="px-3 py-2 rounded-xl bg-red-600/20 text-red-400 hover:bg-red-600/30 text-xs transition"
                 >
                   ✕
                 </button>
@@ -609,115 +675,159 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={addSocialLink}
-              className="text-xs px-3 py-1 rounded-lg bg-neutral-800"
+              className="text-[11px] px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition"
             >
               + Add social link
             </button>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5 space-y-4">
-          <h2 className="text-lg font-semibold">Invoice</h2>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <input
-              placeholder="Brand name (shown on top)"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoiceBrandName}
-              onChange={(e) => handleChange("invoiceBrandName", e.target.value)}
-            />
-            <input
-              placeholder="Company legal name"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoiceCompanyName}
-              onChange={(e) => handleChange("invoiceCompanyName", e.target.value)}
-            />
-            <input
-              placeholder="GSTIN"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoiceSellerGstin}
-              onChange={(e) => handleChange("invoiceSellerGstin", e.target.value)}
-            />
+        {/* Invoice */}
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🧾</span>
+            <h2 className="text-base sm:text-lg font-semibold">Invoice Settings</h2>
           </div>
 
-          <textarea
-            rows={4}
-            placeholder={"Seller address (multi-line)\nLine 1\nLine 2\nCity, State - Pincode"}
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.invoiceSellerAddress}
-            onChange={(e) => handleChange("invoiceSellerAddress", e.target.value)}
-          />
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <input
-              placeholder="Seller phone"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoiceSellerPhone}
-              onChange={(e) => handleChange("invoiceSellerPhone", e.target.value)}
-            />
-            <input
-              placeholder="Seller email"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoiceSellerEmail}
-              onChange={(e) => handleChange("invoiceSellerEmail", e.target.value)}
-            />
-            <input
-              placeholder="Website"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoiceSellerWebsite}
-              onChange={(e) => handleChange("invoiceSellerWebsite", e.target.value)}
-            />
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <input
-              placeholder="Invoice prefix (e.g. INV)"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoicePrefix}
-              onChange={(e) => handleChange("invoicePrefix", e.target.value)}
-            />
-            <input
-              placeholder="Default tax rate (%)"
-              type="number"
-              className="rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-              value={form.invoiceDefaultTaxRate}
-              onChange={(e) => handleChange("invoiceDefaultTaxRate", e.target.valueAsNumber)}
-            />
-            <div className="text-xs text-neutral-400 flex items-center">
-              Used only if order doesn’t already have a tax value.
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Brand Name</label>
+              <input
+                placeholder="Pearl Bloom"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.invoiceBrandName}
+                onChange={(e) => handleChange("invoiceBrandName", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Company Name</label>
+              <input
+                placeholder="Legal entity name"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.invoiceCompanyName}
+                onChange={(e) => handleChange("invoiceCompanyName", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">GSTIN</label>
+              <input
+                placeholder="22AAAAA0000A1Z5"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition font-mono"
+                value={form.invoiceSellerGstin}
+                onChange={(e) => handleChange("invoiceSellerGstin", e.target.value)}
+              />
             </div>
           </div>
 
-          <input
-            placeholder="QR link template (optional). Use {orderId} or {displayId}"
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.invoiceQrUrlTemplate}
-            onChange={(e) => handleChange("invoiceQrUrlTemplate", e.target.value)}
-          />
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Seller Address</label>
+            <textarea
+              rows={3}
+              placeholder={"Line 1\nLine 2\nCity, State - Pincode"}
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition resize-none"
+              value={form.invoiceSellerAddress}
+              onChange={(e) => handleChange("invoiceSellerAddress", e.target.value)}
+            />
+          </div>
 
-          <textarea
-            rows={4}
-            placeholder={"Invoice notes / terms (one per line)\nThank you...\nReturn policy..."}
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.invoiceNotes}
-            onChange={(e) => handleChange("invoiceNotes", e.target.value)}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Phone</label>
+              <input
+                placeholder="+91 98765 43210"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.invoiceSellerPhone}
+                onChange={(e) => handleChange("invoiceSellerPhone", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Email</label>
+              <input
+                placeholder="billing@pearlbloom.in"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.invoiceSellerEmail}
+                onChange={(e) => handleChange("invoiceSellerEmail", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Website</label>
+              <input
+                placeholder="https://pearlbloom.in"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.invoiceSellerWebsite}
+                onChange={(e) => handleChange("invoiceSellerWebsite", e.target.value)}
+              />
+            </div>
+          </div>
 
-          <textarea
-            rows={4}
-            placeholder={"Bank details (optional, multi-line)\nAccount Name:\nAccount No:\nIFSC:\nBank:"}
-            className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-sm"
-            value={form.invoiceBankDetails}
-            onChange={(e) => handleChange("invoiceBankDetails", e.target.value)}
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Prefix</label>
+              <input
+                placeholder="INV"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition font-mono"
+                value={form.invoicePrefix}
+                onChange={(e) => handleChange("invoicePrefix", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Tax Rate (%)</label>
+              <input
+                type="number"
+                placeholder="18"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.invoiceDefaultTaxRate}
+                onChange={(e) => handleChange("invoiceDefaultTaxRate", e.target.valueAsNumber)}
+              />
+            </div>
+            <div className="text-[10px] text-neutral-500 flex items-center">
+              Used if order doesn't have tax value
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">QR Link Template</label>
+            <input
+              placeholder="https://pearlbloom.in/order/{orderId}"
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition font-mono"
+              value={form.invoiceQrUrlTemplate}
+              onChange={(e) => handleChange("invoiceQrUrlTemplate", e.target.value)}
+            />
+            <p className="text-[10px] text-neutral-500 mt-1">Use {"{orderId}"} or {"{displayId}"}</p>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Invoice Notes</label>
+            <textarea
+              rows={3}
+              placeholder={"Thank you for shopping with us.\nReturn policy terms..."}
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition resize-none"
+              value={form.invoiceNotes}
+              onChange={(e) => handleChange("invoiceNotes", e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Bank Details</label>
+            <textarea
+              rows={3}
+              placeholder={"Account Name: Pearl Bloom\nAccount No: XXXX\nIFSC: XXXX\nBank: XXXX"}
+              className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition resize-none font-mono"
+              value={form.invoiceBankDetails}
+              onChange={(e) => handleChange("invoiceBankDetails", e.target.value)}
+            />
+          </div>
         </section>
 
-        <button
-          disabled={saving}
-          className="rounded-lg bg-yellow-500 text-black px-4 py-2 text-sm font-medium disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save settings"}
-        </button>
+        {/* Save Button - Sticky on mobile */}
+        <div className="sticky bottom-4 sm:static">
+          <button
+            disabled={saving}
+            className="w-full sm:w-auto rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black px-6 py-3 text-sm font-semibold disabled:opacity-50 transition shadow-lg shadow-yellow-500/20"
+          >
+            {saving ? "Saving…" : "💾 Save Settings"}
+          </button>
+        </div>
       </form>
     </AdminLayout>
   );

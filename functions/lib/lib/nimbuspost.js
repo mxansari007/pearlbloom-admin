@@ -89,7 +89,7 @@ async function nimbuspostGetCouriers() {
             ? json.data.data
             : [];
     const couriers = rows
-        .map((c) => ({ id: normalize(c?.id), name: normalize(c?.name) }))
+        .map((c) => ({ id: normalize(c?.id), name: normalize(c?.name), raw: c }))
         .filter((c) => c.id && c.name)
         .sort((a, b) => a.name.localeCompare(b.name));
     return couriers;

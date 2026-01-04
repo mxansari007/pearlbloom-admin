@@ -76,6 +76,35 @@ const scopeLabel = (c: Coupon) => {
   return scope;
 };
 
+const CouponRowSkeleton = () => (
+  <tr className="animate-pulse">
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-2/3"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-3 bg-neutral-700 rounded w-5/6"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-4/6"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-3 bg-neutral-700 rounded w-5/6"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-4/6"></div>
+    </td>
+    <td className="px-5 py-4 text-right">
+      <div className="flex justify-end gap-2">
+        <div className="h-7 w-16 bg-neutral-700 rounded-full"></div>
+        <div className="h-7 w-16 bg-neutral-700 rounded-full"></div>
+      </div>
+    </td>
+  </tr>
+);
+
 export default function CouponsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Coupon[]>([]);
@@ -202,6 +231,10 @@ export default function CouponsPage() {
           </thead>
 
           <tbody className="divide-y divide-neutral-800">
+            {loading &&
+              Array.from({ length: 5 }).map((_, i) => (
+                <CouponRowSkeleton key={i} />
+              ))}
             {!loading && filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-5 py-10 text-center text-neutral-400">
@@ -210,7 +243,7 @@ export default function CouponsPage() {
               </tr>
             )}
 
-            {filtered.map((c) => (
+            {!loading && filtered.map((c) => (
               <tr key={c.code} className="hover:bg-neutral-800/40 transition">
                 <td className="px-5 py-4">
                   <div className="flex flex-col gap-1">
@@ -273,14 +306,6 @@ export default function CouponsPage() {
                 </td>
               </tr>
             ))}
-
-            {loading && (
-              <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-neutral-400">
-                  Loading coupons…
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>

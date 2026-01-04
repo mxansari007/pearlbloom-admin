@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AdminLayout from "../layouts/AdminLayout";
 import { getPosthogReportHttp } from "../lib/functions";
@@ -15,6 +15,15 @@ import {
 } from "recharts";
 import { db, doc, getDoc } from "../firebase";
 import { geoMercator, geoPath } from "d3-geo";
+import { getCached, invalidateCachePrefix } from "../lib/cache";
+
+// Cache TTLs
+const CACHE_TTL_EVENT_DEFS = 30 * 60 * 1000; // 30 minutes for event definitions
+const CACHE_TTL_METRICS = 5 * 60 * 1000; // 5 minutes for metrics
+const CACHE_TTL_USER_NAMES = 60 * 60 * 1000; // 1 hour for user names
+
+// User name cache (in-memory for current session)
+const userNameCache = new Map<string, string | undefined>();
 
 type TrendPoint = { day: string; count: number };
 type TopRow = { value: string; count: number };
@@ -287,6 +296,116 @@ function IndiaStateHeatMap({ rows }: { rows: TopRow[] }) {
   );
 }
 
+/* ---------------- Stat Card Component ---------------- */
+function StatCard({
+  label,
+  value,
+  subtitle,
+  icon,
+  accent = "from-neutral-500/10 to-transparent",
+  highlight = false,
+}: {
+  label: string;
+  value: number;
+  subtitle: string;
+  icon: string;
+  accent?: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`
+        relative overflow-hidden rounded-2xl border p-4 sm:p-5 transition-all duration-200
+        hover:scale-[1.02] hover:shadow-lg hover:shadow-black/20
+        ${highlight
+          ? "border-yellow-500/40 bg-gradient-to-br from-yellow-500/10 via-neutral-950/80 to-neutral-950"
+          : "border-neutral-800 bg-neutral-950/60"
+        }
+      `}
+    >
+      {/* Gradient accent */}
+      <div className={`absolute inset-0 bg-gradient-to-br ${accent} pointer-events-none`} />
+      
+      <div className="relative">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] sm:text-[11px] uppercase tracking-wider text-neutral-500 font-medium">
+            {label}
+          </span>
+          <span className="text-base sm:text-lg opacity-60">{icon}</span>
+        </div>
+        <div className={`text-xl sm:text-2xl lg:text-3xl font-bold mt-2 ${highlight ? "text-yellow-100" : "text-white"}`}>
+          {formatNumber(value)}
+        </div>
+        <div className="text-[10px] sm:text-[11px] text-neutral-500 mt-1.5 truncate" title={subtitle}>
+          {subtitle}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Section Card Component ---------------- */
+function SectionCard({
+  title,
+  subtitle,
+  children,
+  actions,
+  className = "",
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  actions?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm ${className}`}>
+      <div className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-neutral-100">{title}</h2>
+            {subtitle && (
+              <p className="text-[11px] text-neutral-500 mt-0.5">{subtitle}</p>
+            )}
+          </div>
+          {actions && <div className="flex-shrink-0">{actions}</div>}
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Empty State Component ---------------- */
+function EmptyState({ message = "No data available" }: { message?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 text-center">
+      <div className="text-3xl mb-2 opacity-40">📊</div>
+      <p className="text-sm text-neutral-500">{message}</p>
+    </div>
+  );
+}
+
+const AnalyticsPageSkeleton = () => (
+  <div className="animate-pulse">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 sm:p-5 h-24 sm:h-28"></div>
+      ))}
+    </div>
+
+    <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 sm:p-6 lg:col-span-2 h-64"></div>
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 sm:p-6 h-64"></div>
+    </div>
+
+    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 sm:p-6 h-80"></div>
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 sm:p-6 h-80"></div>
+    </div>
+  </div>
+);
+
 export default function AnalyticsPage() {
   const navigate = useNavigate();
   const callPosthog = useMemo(() => {
@@ -334,7 +453,7 @@ export default function AnalyticsPage() {
   const window = useMemo(() => RANGE_OPTIONS.find((o) => o.key === rangeKey) || RANGE_OPTIONS[1], [rangeKey]);
   const windowPayload = useMemo(() => ({ days: window.days, hours: window.hours }), [window.days, window.hours]);
 
-  const refresh = async () => {
+  const refresh = async (forceRefresh = false) => {
     if (!callPosthog) {
       setError("Analytics client not initialized.");
       setLoading(false);
@@ -344,20 +463,25 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [defsRes] = await Promise.all([
-        callPosthog({ report: "event_definitions", limit: 300, days: 90 }),
-      ]);
+      // Cache event definitions - they rarely change
+      const defs = await getCached<string[]>(
+        "analytics:event_definitions",
+        async () => {
+          const defsRes = await callPosthog({ report: "event_definitions", limit: 300, days: 90 });
+          const defRows = (defsRes.data as any)?.results;
+          return (
+            Array.isArray(defRows)
+              ? defRows
+              : Array.isArray(defRows?.results)
+                ? defRows.results
+                : []
+          )
+            .map((r: any) => String(r?.event ?? r?.[0] ?? ""))
+            .filter((s: string) => s.length > 0);
+        },
+        forceRefresh ? 0 : CACHE_TTL_EVENT_DEFS
+      );
 
-      const defRows = (defsRes.data as any)?.results;
-      const defs: string[] = (
-        Array.isArray(defRows)
-          ? defRows
-          : Array.isArray(defRows?.results)
-            ? defRows.results
-            : []
-      )
-        .map((r: any) => String(r?.event ?? r?.[0] ?? ""))
-        .filter((s: string) => s.length > 0);
       setEventDefs(defs);
 
       const pickByExact = (v: string) => (defs.includes(v) ? v : undefined);
@@ -376,77 +500,73 @@ export default function AnalyticsPage() {
     }
   };
 
-  const loadMetrics = async () => {
-    if (!callPosthog) return;
+  // Track if we've already loaded metrics for this range to prevent duplicate calls
+  const loadingRef = useRef(false);
+
+  const loadMetrics = async (forceRefresh = false) => {
+    if (!callPosthog || loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
+
+    // Create a cache key based on the current parameters
+    const cacheKey = `analytics:metrics:${rangeKey}:${pageviewEvent}:${productViewEvent}:${addToCartEvent}:${checkoutEvent}:${purchaseEvent}:${productPropKey}`;
+
     try {
-      const [
-        pvTotalRes,
-        prTotalRes,
-        atcTotalRes,
-        coTotalRes,
-        purTotalRes,
-        pvSeriesRes,
-        purSeriesRes,
-        topUrlRes,
-        topProdRes,
-        recentRes,
-        indiaStatesRes,
-        indiaCitiesRes,
-        trafficSourcesRes,
-        activeUsersRes,
-      ] = await Promise.all([
-        callPosthog({ report: "total", ...windowPayload, event: pageviewEvent }),
-        callPosthog({ report: "total", ...windowPayload, event: productViewEvent }),
-        callPosthog({ report: "total", ...windowPayload, event: addToCartEvent }),
-        callPosthog({ report: "total", ...windowPayload, event: checkoutEvent }),
-        callPosthog({ report: "total", ...windowPayload, event: purchaseEvent }),
-        callPosthog({ report: "time_series", ...windowPayload, event: pageviewEvent }),
-        callPosthog({ report: "time_series", ...windowPayload, event: purchaseEvent }),
-        callPosthog({
-          report: "top_property",
-          ...windowPayload,
-          event: pageviewEvent,
-          property: "$current_url",
-          limit: 10,
-        }),
-        callPosthog({
-          report: "top_property",
-          ...windowPayload,
-          event: productViewEvent,
-          property: productPropKey,
-          limit: 10,
-        }),
-        callPosthog({ report: "recent_events", ...windowPayload, limit: 30 }),
-        callPosthog({ report: "geo_india_states", ...windowPayload, limit: 12, event: pageviewEvent }),
-        callPosthog({ report: "geo_india_cities", ...windowPayload, limit: 12, event: pageviewEvent }),
-        callPosthog({ report: "traffic_sources", ...windowPayload, limit: 12, event: pageviewEvent }),
-        callPosthog({ report: "active_users", ...windowPayload, limit: 12, event: pageviewEvent }),
-      ]);
+      // Fetch all metrics with caching - using SINGLE batch call instead of 14 separate calls
+      const metrics = await getCached(
+        cacheKey,
+        async () => {
+          // Single batch call to backend - reduces 14 function invocations to 1
+          const batchRes = await callPosthog({
+            report: "dashboard_batch",
+            ...windowPayload,
+            pageviewEvent,
+            productViewEvent,
+            addToCartEvent,
+            checkoutEvent,
+            purchaseEvent,
+            productPropKey,
+          } as any);
 
-      setPageviewsTotal(toTotal((pvTotalRes.data as any)?.results));
-      setProductViewsTotal(toTotal((prTotalRes.data as any)?.results));
-      setAddToCartTotal(toTotal((atcTotalRes.data as any)?.results));
-      setCheckoutTotal(toTotal((coTotalRes.data as any)?.results));
-      setPurchaseTotal(toTotal((purTotalRes.data as any)?.results));
+          const data = batchRes.data as any;
 
-      setPageviewsSeries(toLinePoints((pvSeriesRes.data as any)?.results));
-      setPurchaseSeries(toLinePoints((purSeriesRes.data as any)?.results));
+          return {
+            pageviewsTotal: toTotal(data?.pageviewsTotal),
+            productViewsTotal: toTotal(data?.productViewsTotal),
+            addToCartTotal: toTotal(data?.addToCartTotal),
+            checkoutTotal: toTotal(data?.checkoutTotal),
+            purchaseTotal: toTotal(data?.purchaseTotal),
+            pageviewsSeries: toLinePoints(data?.pageviewsSeries),
+            purchaseSeries: toLinePoints(data?.purchaseSeries),
+            topUrls: toTopRows(data?.topUrls),
+            topProducts: toTopRows(data?.topProducts),
+            recent: toRecentEvents(data?.recent),
+            indiaStates: toTopRows(data?.indiaStates),
+            indiaCities: toTopRows(data?.indiaCities),
+            trafficSources: toTopRows(data?.trafficSources),
+            activeUsersRaw: Array.isArray(data?.activeUsers) ? data.activeUsers : [],
+          };
+        },
+        forceRefresh ? 0 : CACHE_TTL_METRICS
+      );
 
-      setTopUrls(toTopRows((topUrlRes.data as any)?.results));
-      setTopProducts(toTopRows((topProdRes.data as any)?.results));
+      setPageviewsTotal(metrics.pageviewsTotal);
+      setProductViewsTotal(metrics.productViewsTotal);
+      setAddToCartTotal(metrics.addToCartTotal);
+      setCheckoutTotal(metrics.checkoutTotal);
+      setPurchaseTotal(metrics.purchaseTotal);
+      setPageviewsSeries(metrics.pageviewsSeries);
+      setPurchaseSeries(metrics.purchaseSeries);
+      setTopUrls(metrics.topUrls);
+      setTopProducts(metrics.topProducts);
+      setRecent(metrics.recent);
+      setIndiaStates(metrics.indiaStates);
+      setIndiaCities(metrics.indiaCities);
+      setTrafficSources(metrics.trafficSources);
 
-      setRecent(toRecentEvents((recentRes.data as any)?.results));
-
-      setIndiaStates(toTopRows((indiaStatesRes.data as any)?.results));
-      setIndiaCities(toTopRows((indiaCitiesRes.data as any)?.results));
-      setTrafficSources(toTopRows((trafficSourcesRes.data as any)?.results));
-
-      const auArr: any[] = Array.isArray((activeUsersRes.data as any)?.results)
-        ? (activeUsersRes.data as any).results
-        : [];
-      const baseUsers = auArr
+      // Process active users with cached user names
+      const baseUsers = metrics.activeUsersRaw
         .map((r: any) => {
           const distinct_id = String(r?.distinct_id ?? r?.[0] ?? "").trim();
           const count = Number(r?.count ?? r?.[1] ?? 0);
@@ -456,8 +576,14 @@ export default function AnalyticsPage() {
         })
         .filter(Boolean) as Array<{ distinct_id: string; count: number; last_seen?: string }>;
 
+      // Use cached user names to avoid repeated Firestore reads
       const withNames = await Promise.all(
         baseUsers.map(async (u) => {
+          // Check in-memory cache first
+          if (userNameCache.has(u.distinct_id)) {
+            return { ...u, name: userNameCache.get(u.distinct_id) };
+          }
+
           try {
             const snap = await getDoc(doc(db, "users", u.distinct_id));
             if (snap.exists()) {
@@ -467,9 +593,14 @@ export default function AnalyticsPage() {
                   .filter(Boolean)
                   .join(" ")
                   .trim() || d?.name;
-              return { ...u, name: typeof name === "string" && name.trim().length ? name : undefined };
+              const finalName = typeof name === "string" && name.trim().length ? name : undefined;
+              userNameCache.set(u.distinct_id, finalName);
+              return { ...u, name: finalName };
             }
-          } catch {}
+            userNameCache.set(u.distinct_id, undefined);
+          } catch {
+            userNameCache.set(u.distinct_id, undefined);
+          }
           return u;
         })
       );
@@ -478,7 +609,14 @@ export default function AnalyticsPage() {
       setError(err?.message || "Failed to load analytics.");
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
+  };
+
+  // Force refresh handler for the Refresh button
+  const handleForceRefresh = () => {
+    invalidateCachePrefix("analytics:");
+    refresh(true);
   };
 
   const loadSelectedUser = async (distinctId: string) => {
@@ -522,11 +660,11 @@ export default function AnalyticsPage() {
       title="Analytics"
       subtitle="PostHog activity and business insights for your store."
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
           <select
             value={rangeKey}
             onChange={(e) => setRangeKey(e.target.value as RangeKey)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
+            className="rounded-xl border border-neutral-700 bg-neutral-900/80 text-[11px] sm:text-[12px] text-neutral-100 px-2.5 sm:px-4 py-2 focus:border-yellow-500/50 focus:outline-none transition cursor-pointer"
           >
             {RANGE_OPTIONS.map((o) => (
               <option key={o.key} value={o.key}>
@@ -535,502 +673,384 @@ export default function AnalyticsPage() {
             ))}
           </select>
           <button
-            onClick={loadMetrics}
+            onClick={handleForceRefresh}
             disabled={loading}
-            className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-900 transition disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 text-[11px] sm:text-[12px] rounded-xl border border-neutral-700 px-3 sm:px-4 py-2 text-neutral-200 hover:bg-yellow-500/10 hover:border-yellow-500/40 hover:text-yellow-200 transition disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-neutral-700 disabled:hover:text-neutral-200"
           >
-            Refresh
+            <span className={loading ? "animate-spin" : ""}>↻</span>
+            <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
       }
     >
-      {error && (
-        <div className="mb-4 rounded-2xl border border-red-700 bg-red-900/10 p-4 text-[12px] text-red-300">
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5">
-          <div className="text-[11px] text-neutral-500">Pageviews</div>
-          <div className="text-2xl font-semibold mt-2">
-            {formatNumber(pageviewsTotal)}
-          </div>
-          <div className="text-[11px] text-neutral-500 mt-2">
-            Event: {pageviewEvent}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5">
-          <div className="text-[11px] text-neutral-500">Product views</div>
-          <div className="text-2xl font-semibold mt-2">
-            {formatNumber(productViewsTotal)}
-          </div>
-          <div className="text-[11px] text-neutral-500 mt-2">
-            Event: {productViewEvent}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5">
-          <div className="text-[11px] text-neutral-500">Add to cart</div>
-          <div className="text-2xl font-semibold mt-2">
-            {formatNumber(addToCartTotal)}
-          </div>
-          <div className="text-[11px] text-neutral-500 mt-2">
-            Event: {addToCartEvent}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5">
-          <div className="text-[11px] text-neutral-500">Checkout</div>
-          <div className="text-2xl font-semibold mt-2">
-            {formatNumber(checkoutTotal)}
-          </div>
-          <div className="text-[11px] text-neutral-500 mt-2">
-            Event: {checkoutEvent}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-5">
-          <div className="text-[11px] text-neutral-500">Purchases</div>
-          <div className="text-2xl font-semibold mt-2">
-            {formatNumber(purchaseTotal)}
-          </div>
-          <div className="text-[11px] text-neutral-500 mt-2">
-            ATC → Purchase: {atcToPurchaseRate.toFixed(1)}%
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6 lg:col-span-2">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                Trends
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                Pageviews and purchases over time.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <select
-                value={pageviewEvent}
-                onChange={(e) => setPageviewEvent(e.target.value)}
-                className="rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-              >
-                {eventDefs.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={purchaseEvent}
-                onChange={(e) => setPurchaseEvent(e.target.value)}
-                className="rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-              >
-                {eventDefs.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4">
-              <div className="text-[11px] text-neutral-500 mb-2">
-                {pageviewEvent}
+      {loading ? (
+        <AnalyticsPageSkeleton />
+      ) : (
+        <>
+          {error && (
+            <div className="mb-6 rounded-2xl border border-red-500/30 bg-gradient-to-r from-red-950/40 to-red-900/20 p-4 sm:p-5">
+              <div className="flex items-start gap-3">
+                <span className="text-lg">⚠️</span>
+                <div>
+                  <p className="text-sm font-medium text-red-200">Failed to load analytics</p>
+                  <p className="text-[12px] text-red-300/80 mt-1">{error}</p>
+                </div>
               </div>
-              {pageviewsSeries.length ? (
-                <TrendChart data={pageviewsSeries} />
-              ) : (
-                <div className="text-sm text-neutral-500">No data.</div>
-              )}
-            </div>
-            <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4">
-              <div className="text-[11px] text-neutral-500 mb-2">
-                {purchaseEvent}
-              </div>
-              {purchaseSeries.length ? (
-                <TrendChart data={purchaseSeries} />
-              ) : (
-                <div className="text-sm text-neutral-500">No data.</div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <h2 className="text-sm font-semibold text-neutral-200 mb-2">
-            Event Mapping
-          </h2>
-          <div className="text-[11px] text-neutral-500 mb-4">
-            Pick the events you track on your storefront.
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <div className="text-[11px] text-neutral-500 mb-1">Product view</div>
-              <select
-                value={productViewEvent}
-                onChange={(e) => setProductViewEvent(e.target.value)}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-              >
-                {eventDefs.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div className="text-[11px] text-neutral-500 mb-1">Add to cart</div>
-              <select
-                value={addToCartEvent}
-                onChange={(e) => setAddToCartEvent(e.target.value)}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-              >
-                {eventDefs.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div className="text-[11px] text-neutral-500 mb-1">Checkout</div>
-              <select
-                value={checkoutEvent}
-                onChange={(e) => setCheckoutEvent(e.target.value)}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-              >
-                {eventDefs.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div className="text-[11px] text-neutral-500 mb-1">Purchase</div>
-              <select
-                value={purchaseEvent}
-                onChange={(e) => setPurchaseEvent(e.target.value)}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-              >
-                {eventDefs.map((e) => (
-                  <option key={e} value={e}>
-                    {e}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <div className="flex items-end justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                Top Pages
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                Most visited URLs (event-based).
-              </p>
-            </div>
-          </div>
-          {topUrls.length ? (
-            <HorizontalBars rows={topUrls} />
-          ) : (
-            <div className="text-sm text-neutral-500">No data.</div>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                Top Products
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                Most interacted products by property key.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                value={productPropKey}
-                onChange={(e) => setProductPropKey(e.target.value)}
-                className="w-40 rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-                placeholder="productId"
-              />
-            </div>
-          </div>
-          {topProducts.length ? (
-            <HorizontalBars rows={topProducts} />
-          ) : (
-            <div className="text-sm text-neutral-500">No data.</div>
-          )}
-        </section>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <div className="flex items-end justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                India Views (States)
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                Top states by {pageviewEvent} (GeoIP: IN).
-              </p>
-            </div>
-          </div>
-          {indiaStates.length ? (
-            <IndiaStateHeatMap rows={indiaStates} />
-          ) : (
-            <div className="text-sm text-neutral-500">No data.</div>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <div className="flex items-end justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                India Views (Cities)
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                Top cities by {pageviewEvent} (GeoIP: IN).
-              </p>
-            </div>
-          </div>
-          {indiaCities.length ? (
-            <HorizontalBars rows={indiaCities} />
-          ) : (
-            <div className="text-sm text-neutral-500">No data.</div>
-          )}
-        </section>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <div className="flex items-end justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                Active Users
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                Top users by {pageviewEvent} volume.
-              </p>
-            </div>
-          </div>
-
-          {activeUsers.length === 0 ? (
-            <div className="text-sm text-neutral-500">No data.</div>
-          ) : (
-            <div className="rounded-xl overflow-hidden border border-neutral-800">
-              <table className="min-w-full divide-y divide-neutral-800">
-                <thead className="bg-neutral-900/60">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                      User
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                      Events
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                      Last seen
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-800">
-                  {activeUsers.map((u) => (
-                    <tr
-                      key={u.distinct_id}
-                      className="bg-neutral-950/40 hover:bg-neutral-900/40 transition cursor-pointer"
-                      onClick={() => {
-                        if (u.name) {
-                          navigate(`/users/${u.distinct_id}`);
-                          return;
-                        }
-                        loadSelectedUser(u.distinct_id);
-                      }}
-                    >
-                      <td className="px-4 py-2 text-[12px] text-neutral-200">
-                        {u.name ? (
-                          <Link
-                            to={`/users/${u.distinct_id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="hover:underline"
-                          >
-                            {u.name}
-                          </Link>
-                        ) : (
-                          "Unknown"
-                        )}
-                        <div className="text-[11px] text-neutral-500 mt-0.5">
-                          {u.distinct_id}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-[12px] text-neutral-300">
-                        {formatNumber(u.count)}
-                      </td>
-                      <td className="px-4 py-2 text-[12px] text-neutral-300">
-                        {u.last_seen ? String(u.last_seen) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           )}
-        </section>
 
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <div className="flex items-end justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                Traffic Sources
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                Where {pageviewEvent} came from (referrer / UTM).
-              </p>
-            </div>
+          {/* Stats Cards - Responsive grid: 2 cols on mobile, 3 on tablet, 5 on desktop */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+            <StatCard
+              label="Pageviews"
+              value={pageviewsTotal}
+              subtitle={pageviewEvent}
+              icon="👁"
+              accent="from-blue-500/20 to-transparent"
+            />
+            <StatCard
+              label="Product Views"
+              value={productViewsTotal}
+              subtitle={productViewEvent}
+              icon="📦"
+              accent="from-purple-500/20 to-transparent"
+            />
+            <StatCard
+              label="Add to Cart"
+              value={addToCartTotal}
+              subtitle={addToCartEvent}
+              icon="🛒"
+              accent="from-amber-500/20 to-transparent"
+            />
+            <StatCard
+              label="Checkout"
+              value={checkoutTotal}
+              subtitle={checkoutEvent}
+              icon="💳"
+              accent="from-emerald-500/20 to-transparent"
+            />
+            <StatCard
+              label="Purchases"
+              value={purchaseTotal}
+              subtitle={`${atcToPurchaseRate.toFixed(1)}% conversion`}
+              icon="✨"
+              accent="from-yellow-500/20 to-transparent"
+              highlight
+            />
           </div>
-          {trafficSources.length ? (
-            <HorizontalBars rows={trafficSources} />
-          ) : (
-            <div className="text-sm text-neutral-500">No data.</div>
-          )}
-        </section>
-      </div>
 
-      {selectedDistinctId && (
-        <div className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-sm font-semibold text-neutral-200">
-                User Activity
-              </h2>
-              <p className="text-[11px] text-neutral-500 mt-1">
-                {selectedDistinctId}
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setSelectedDistinctId(null);
-                setSelectedEvents([]);
-              }}
-              className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-900 transition"
+          {/* Trends + Event Mapping */}
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <SectionCard
+              title="📈 Trends"
+              subtitle="Pageviews and purchases over time"
+              className="lg:col-span-2"
+              actions={
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    value={pageviewEvent}
+                    onChange={(e) => setPageviewEvent(e.target.value)}
+                    className="rounded-lg border border-neutral-700 bg-neutral-900 text-[11px] text-neutral-100 px-2 py-1.5"
+                  >
+                    {eventDefs.map((e) => (
+                      <option key={e} value={e}>{e}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={purchaseEvent}
+                    onChange={(e) => setPurchaseEvent(e.target.value)}
+                    className="rounded-lg border border-neutral-700 bg-neutral-900 text-[11px] text-neutral-100 px-2 py-1.5"
+                  >
+                    {eventDefs.map((e) => (
+                      <option key={e} value={e}>{e}</option>
+                    ))}
+                  </select>
+                </div>
+              }
             >
-              Clear
-            </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-neutral-800/60 bg-neutral-900/40 p-3 sm:p-4">
+                  <div className="flex items-center gap-2 text-[11px] text-neutral-400 mb-3">
+                    <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                    {pageviewEvent}
+                  </div>
+                  {pageviewsSeries.length ? (
+                    <TrendChart data={pageviewsSeries} />
+                  ) : (
+                    <EmptyState message="No pageview data" />
+                  )}
+                </div>
+                <div className="rounded-xl border border-neutral-800/60 bg-neutral-900/40 p-3 sm:p-4">
+                  <div className="flex items-center gap-2 text-[11px] text-neutral-400 mb-3">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                    {purchaseEvent}
+                  </div>
+                  {purchaseSeries.length ? (
+                    <TrendChart data={purchaseSeries} />
+                  ) : (
+                    <EmptyState message="No purchase data" />
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="⚙️ Event Mapping" subtitle="Map your storefront events">
+              <div className="space-y-3">
+                {[
+                  { label: "Product view", value: productViewEvent, setter: setProductViewEvent },
+                  { label: "Add to cart", value: addToCartEvent, setter: setAddToCartEvent },
+                  { label: "Checkout", value: checkoutEvent, setter: setCheckoutEvent },
+                  { label: "Purchase", value: purchaseEvent, setter: setPurchaseEvent },
+                ].map(({ label, value, setter }) => (
+                  <div key={label}>
+                    <label className="text-[10px] uppercase tracking-wider text-neutral-500 font-medium mb-1 block">
+                      {label}
+                    </label>
+                    <select
+                      value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-900/80 text-[12px] text-neutral-100 px-3 py-2 focus:border-yellow-500/50 focus:outline-none transition"
+                    >
+                      {eventDefs.map((e) => (
+                        <option key={e} value={e}>{e}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
           </div>
 
-          {selectedEvents.length === 0 ? (
-            <div className="text-sm text-neutral-500">No events for this user.</div>
-          ) : (
-            <div className="rounded-xl overflow-hidden border border-neutral-800">
-              <table className="min-w-full divide-y divide-neutral-800">
-                <thead className="bg-neutral-900/60">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                      Time
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                      Event
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                      Location
-                    </th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                      URL
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-800">
-                  {selectedEvents.slice(0, 40).map((r, idx) => (
-                    <tr key={idx} className="bg-neutral-950/40">
-                      <td className="px-4 py-2 text-[12px] text-neutral-300">
-                        {r.timestamp}
-                      </td>
-                      <td className="px-4 py-2 text-[12px] text-neutral-200">
-                        {r.event}
-                        {r.session_id && (
-                          <div className="text-[11px] text-neutral-500 mt-0.5">
-                            {r.session_id}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-[12px] text-neutral-300">
-                        {[r.city, r.state, r.country].filter(Boolean).join(", ") || "—"}
-                      </td>
-                      <td className="px-4 py-2 text-[12px] text-neutral-300">
-                        {r.url || "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Top Pages + Top Products */}
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <SectionCard title="🔗 Top Pages" subtitle="Most visited URLs">
+              {topUrls.length ? (
+                <HorizontalBars rows={topUrls} />
+              ) : (
+                <EmptyState message="No page data" />
+              )}
+            </SectionCard>
+
+            <SectionCard
+              title="🏆 Top Products"
+              subtitle="Most viewed products"
+              actions={
+                <input
+                  value={productPropKey}
+                  onChange={(e) => setProductPropKey(e.target.value)}
+                  className="w-28 sm:w-36 rounded-lg border border-neutral-700 bg-neutral-900/80 text-[11px] text-neutral-100 px-2 py-1.5 focus:border-yellow-500/50 focus:outline-none transition"
+                  placeholder="productId"
+                />
+              }
+            >
+              {topProducts.length ? (
+                <HorizontalBars rows={topProducts} />
+              ) : (
+                <EmptyState message="No product data" />
+              )}
+            </SectionCard>
+          </div>
+
+          {/* India Geography */}
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <SectionCard title="🗺️ India States" subtitle={`Top states by ${pageviewEvent}`}>
+              {indiaStates.length ? (
+                <IndiaStateHeatMap rows={indiaStates} />
+              ) : (
+                <EmptyState message="No geographic data" />
+              )}
+            </SectionCard>
+
+            <SectionCard title="🏙️ India Cities" subtitle={`Top cities by ${pageviewEvent}`}>
+              {indiaCities.length ? (
+                <HorizontalBars rows={indiaCities} />
+              ) : (
+                <EmptyState message="No city data" />
+              )}
+            </SectionCard>
+          </div>
+
+          {/* Active Users + Traffic Sources */}
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <SectionCard title="👥 Active Users" subtitle={`Top users by ${pageviewEvent}`}>
+              {activeUsers.length === 0 ? (
+                <EmptyState message="No user activity" />
+              ) : (
+                <div className="rounded-xl overflow-hidden border border-neutral-800/60 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-neutral-800/60">
+                    <thead className="bg-neutral-900/60">
+                      <tr>
+                        <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                          User
+                        </th>
+                        <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                          Events
+                        </th>
+                        <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider hidden sm:table-cell">
+                          Last seen
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/40">
+                      {activeUsers.map((u) => (
+                        <tr
+                          key={u.distinct_id}
+                          className="bg-neutral-950/20 hover:bg-neutral-900/50 transition cursor-pointer group"
+                          onClick={() => {
+                            if (u.name) {
+                              navigate(`/users/${u.distinct_id}`);
+                              return;
+                            }
+                            loadSelectedUser(u.distinct_id);
+                          }}
+                        >
+                          <td className="px-3 sm:px-4 py-2.5">
+                            <div className="text-[12px] text-neutral-200 group-hover:text-yellow-200 transition">
+                              {u.name ? (
+                                <Link
+                                  to={`/users/${u.distinct_id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="hover:underline font-medium"
+                                >
+                                  {u.name}
+                                </Link>
+                              ) : (
+                                <span className="text-neutral-400">Anonymous</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 truncate max-w-[120px] sm:max-w-[180px]">
+                              {u.distinct_id}
+                            </div>
+                          </td>
+                          <td className="px-3 sm:px-4 py-2.5">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-300">
+                              {formatNumber(u.count)}
+                            </span>
+                          </td>
+                          <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 hidden sm:table-cell">
+                            {u.last_seen ? String(u.last_seen).split(" ")[0] : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard title="🚀 Traffic Sources" subtitle={`Where ${pageviewEvent} came from`}>
+              {trafficSources.length ? (
+                <HorizontalBars rows={trafficSources} />
+              ) : (
+                <EmptyState message="No traffic data" />
+              )}
+            </SectionCard>
+          </div>
+
+          {/* User Activity Panel */}
+          {selectedDistinctId && (
+            <div className="mt-6">
+              <SectionCard
+                title="🔍 User Activity"
+                subtitle={selectedDistinctId}
+                actions={
+                  <button
+                    onClick={() => {
+                      setSelectedDistinctId(null);
+                      setSelectedEvents([]);
+                    }}
+                    className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-300 hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-300 transition"
+                  >
+                    ✕ Close
+                  </button>
+                }
+              >
+                {selectedEvents.length === 0 ? (
+                  <EmptyState message="No events for this user" />
+                ) : (
+                  <div className="rounded-xl overflow-hidden border border-neutral-800/60 overflow-x-auto">
+                    <table className="min-w-full divide-y divide-neutral-800/60">
+                      <thead className="bg-neutral-900/60">
+                        <tr>
+                          <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Time</th>
+                          <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Event</th>
+                          <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider hidden md:table-cell">Location</th>
+                          <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider hidden lg:table-cell">URL</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-800/40">
+                        {selectedEvents.slice(0, 40).map((r, idx) => (
+                          <tr key={idx} className="bg-neutral-950/20 hover:bg-neutral-900/30 transition">
+                            <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 whitespace-nowrap">
+                              {r.timestamp?.split(" ")[1] || r.timestamp}
+                            </td>
+                            <td className="px-3 sm:px-4 py-2.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-500/10 text-purple-300">
+                                {r.event}
+                              </span>
+                            </td>
+                            <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 hidden md:table-cell">
+                              {[r.city, r.state].filter(Boolean).join(", ") || "—"}
+                            </td>
+                            <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-500 hidden lg:table-cell truncate max-w-[200px]">
+                              {r.url || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </SectionCard>
             </div>
           )}
-        </div>
+
+          {/* Recent Activity */}
+          <div className="mt-6">
+            <SectionCard title="⚡ Recent Activity" subtitle="Latest captured events">
+              {recent.length === 0 ? (
+                <EmptyState message="No recent events" />
+              ) : (
+                <div className="rounded-xl overflow-hidden border border-neutral-800/60 overflow-x-auto">
+                  <table className="min-w-full divide-y divide-neutral-800/60">
+                    <thead className="bg-neutral-900/60">
+                      <tr>
+                        <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Time</th>
+                        <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Event</th>
+                        <th className="px-3 sm:px-4 py-2.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider hidden sm:table-cell">URL</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/40">
+                      {recent.map((r, idx) => (
+                        <tr key={idx} className="bg-neutral-950/20 hover:bg-neutral-900/30 transition">
+                          <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-400 whitespace-nowrap">
+                            {r.timestamp?.split(" ")[1] || r.timestamp}
+                          </td>
+                          <td className="px-3 sm:px-4 py-2.5">
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center w-fit px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/10 text-emerald-300">
+                                {r.event}
+                              </span>
+                              {r.distinct_id && (
+                                <span className="text-[10px] text-neutral-500 truncate max-w-[100px] sm:max-w-[150px]">
+                                  {r.distinct_id}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 sm:px-4 py-2.5 text-[11px] text-neutral-500 hidden sm:table-cell truncate max-w-[200px]">
+                            {r.url || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
+          </div>
+        </>
       )}
-
-      <div className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-950/40 p-6">
-        <div className="flex items-end justify-between gap-4 mb-4">
-          <div>
-            <h2 className="text-sm font-semibold text-neutral-200">
-              Recent Activity
-            </h2>
-            <p className="text-[11px] text-neutral-500 mt-1">
-              Latest captured events.
-            </p>
-          </div>
-        </div>
-
-        {recent.length === 0 ? (
-          <div className="text-sm text-neutral-500">No recent events.</div>
-        ) : (
-          <div className="rounded-xl overflow-hidden border border-neutral-800">
-            <table className="min-w-full divide-y divide-neutral-800">
-              <thead className="bg-neutral-900/60">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                    Time
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                    Event
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-400">
-                    URL
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800">
-                {recent.map((r, idx) => (
-                  <tr key={idx} className="bg-neutral-950/40">
-                    <td className="px-4 py-2 text-[12px] text-neutral-300">
-                      {r.timestamp}
-                    </td>
-                    <td className="px-4 py-2 text-[12px] text-neutral-200">
-                      {r.event}
-                      {r.distinct_id && (
-                        <div className="text-[11px] text-neutral-500 mt-0.5">
-                          {r.distinct_id}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-[12px] text-neutral-300">
-                      {r.url || "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </AdminLayout>
   );
 }

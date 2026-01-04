@@ -78,6 +78,43 @@ const STATUS_OPTIONS = [
   "delivered",
 ];
 
+const OrderDetailPageSkeleton = () => (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
+    <div className="md:col-span-2 space-y-6">
+      {/* Customer */}
+      <div className="rounded-2xl border border-neutral-800 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/4 mb-4"></div>
+        <div className="h-4 bg-neutral-800 rounded w-3/4"></div>
+        <div className="mt-2 h-4 bg-neutral-800 rounded w-1/2"></div>
+        <div className="mt-2 h-4 bg-neutral-800 rounded w-full"></div>
+      </div>
+      {/* Items */}
+      <div className="rounded-2xl border border-neutral-800 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/4 mb-4"></div>
+        <div className="h-32 bg-neutral-800 rounded-xl"></div>
+      </div>
+    </div>
+    <div className="space-y-6">
+      {/* Summary */}
+      <div className="rounded-2xl border border-neutral-800 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+        <div className="space-y-2">
+          <div className="h-4 bg-neutral-800 rounded w-full"></div>
+          <div className="h-4 bg-neutral-800 rounded w-full"></div>
+          <div className="h-4 bg-neutral-800 rounded w-full"></div>
+          <div className="h-4 bg-neutral-800 rounded w-full"></div>
+        </div>
+      </div>
+      {/* Status */}
+      <div className="rounded-2xl border border-neutral-800 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/4 mb-4"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+        <div className="mt-3 h-8 bg-neutral-800 rounded w-full"></div>
+      </div>
+    </div>
+  </div>
+);
+
 export default function OrderDetailPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -540,11 +577,7 @@ export default function OrderDetailPage() {
         </div>
       }
     >
-      {loading && (
-        <div className="rounded-2xl border border-neutral-800 p-6 text-neutral-300">
-          Loading…
-        </div>
-      )}
+      {loading && <OrderDetailPageSkeleton />}
 
       {!loading && error && (
         <div className="rounded-2xl border border-red-700 bg-red-900/10 p-6 text-red-300">

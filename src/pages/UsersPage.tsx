@@ -21,6 +21,25 @@ type UserRow = {
 
 const PAGE_SIZES = [10, 20, 50] as const;
 
+const UserRowSkeleton = () => (
+  <tr className="animate-pulse">
+    <td className="px-6 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-6 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-6 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-6 py-4 text-right">
+      <div className="h-7 bg-neutral-700 rounded-full w-12 inline-block"></div>
+    </td>
+  </tr>
+);
+
 export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,16 +261,10 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800">
-            {loading && (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="px-6 py-8 text-center text-neutral-400"
-                >
-                  Loading users…
-                </td>
-              </tr>
-            )}
+            {loading &&
+              Array.from({ length: pageSize }).map((_, i) => (
+                <UserRowSkeleton key={i} />
+              ))}
 
             {!loading && filteredUsers.length === 0 && (
               <tr>

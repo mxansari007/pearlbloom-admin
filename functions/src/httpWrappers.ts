@@ -103,7 +103,18 @@ type PosthogReportRequest =
   | { report: "geo_india_cities"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "traffic_sources"; days?: number; hours?: number; limit?: number; event?: string }
   | { report: "active_users"; days?: number; hours?: number; limit?: number; event?: string }
-  | { report: "user_recent_events"; days?: number; hours?: number; limit?: number; distinct_id: string };
+  | { report: "user_recent_events"; days?: number; hours?: number; limit?: number; distinct_id: string }
+  | {
+      report: "dashboard_batch";
+      days?: number;
+      hours?: number;
+      pageviewEvent: string;
+      productViewEvent: string;
+      addToCartEvent: string;
+      checkoutEvent: string;
+      purchaseEvent: string;
+      productPropKey?: string;
+    };
 
 const toDateTimeLiteral = (d: Date) => {
   const iso = d.toISOString().replace("T", " ").replace("Z", "");
@@ -174,7 +185,6 @@ async function posthogQuery(opts: {
 
 export const posthogReportHttp = https.onRequest(
   {
-    secrets: ["POSTHOG_PERSONAL_API_KEY", "POSTHOG_PROJECT_ID", "POSTHOG_HOST"],
     region: "us-central1",
   },
   async (req: Request, res: Response) => {
@@ -226,6 +236,123 @@ export const posthogReportHttp = https.onRequest(
       const data = (req.body || {}) as PosthogReportRequest;
       const dateTo = new Date();
       const dateFrom = getSafeDateFrom(data);
+
+      // BATCH ENDPOINT: Fetches all dashboard metrics in a single function call (14 queries → 1 invocation)
+      if (data.report === "dashboard_batch") {
+        const {
+          pageviewEvent = "$pageview",
+          productViewEvent = "product_viewed",
+          addToCartEvent = "add_to_cart",
+          checkoutEvent = "checkout_started",
+          purchaseEvent = "purchase",
+          productPropKey = "productId",
+        } = data as any;
+
+        const hours =
+          typeof (data as any)?.hours === "number"
+            ? Math.max(1 / 60, Math.min(24 * 30, (data as any).hours))
+            : undefined;
+        const bucketExpr =
+          typeof hours === "number" && hours <= 2
+            ? "toStartOfMinute(timestamp)"
+            : typeof hours === "number" && hours <= 48
+              ? "toStartOfHour(timestamp)"
+              : "toStartOfDay(timestamp)";
+
+        const dateFromLit = toDateTimeLiteral(dateFrom);
+        const dateToLit = toDateTimeLiteral(dateTo);
+        const pvLit = hogqlStringLiteral(pageviewEvent);
+        const prLit = hogqlStringLiteral(productViewEvent);
+        const atcLit = hogqlStringLiteral(addToCartEvent);
+        const coLit = hogqlStringLiteral(checkoutEvent);
+        const purLit = hogqlStringLiteral(purchaseEvent);
+
+        const utmSource = "lower(coalesce(properties.$utm_source, ''))";
+        const refDomain = "lower(coalesce(properties.$referring_domain, properties.$referrer_domain, ''))";
+        const referrer = "lower(coalesce(properties.$referrer, ''))";
+        const sourceExpr = `multiIf(
+          (${utmSource} like '%instagram%' or ${refDomain} like '%instagram%' or ${referrer} like '%instagram%'), 'Instagram',
+          (${utmSource} like '%google%' or ${refDomain} like '%google%' or ${referrer} like '%google%'), 'Google Search',
+          (${utmSource} like '%facebook%' or ${refDomain} like '%facebook%' or ${referrer} like '%facebook%'), 'Facebook',
+          (${utmSource} like '%whatsapp%' or ${refDomain} like '%whatsapp%' or ${referrer} like '%whatsapp%'), 'WhatsApp',
+          (${utmSource} like '%youtube%' or ${refDomain} like '%youtube%' or ${referrer} like '%youtube%'), 'YouTube',
+          (${utmSource} like '%twitter%' or ${utmSource} like '%x%' or ${refDomain} like '%t.co%' or ${refDomain} like '%twitter%' or ${refDomain} like '%x.com%' or ${referrer} like '%t.co%' or ${referrer} like '%twitter%' or ${referrer} like '%x.com%'), 'X/Twitter',
+          (${utmSource} = '' and ${refDomain} = '' and ${referrer} = ''), 'Direct',
+          'Other'
+        )`;
+
+        // Run all queries in parallel
+        const [
+          pvTotalRes,
+          prTotalRes,
+          atcTotalRes,
+          coTotalRes,
+          purTotalRes,
+          pvSeriesRes,
+          purSeriesRes,
+          topUrlRes,
+          topProdRes,
+          recentRes,
+          indiaStatesRes,
+          indiaCitiesRes,
+          trafficSourcesRes,
+          activeUsersRes,
+        ] = await Promise.all([
+          // Totals
+          posthogQuery({ host, projectId, apiKey, name: "Batch: total pageviews",
+            query: `select count() as count from events where event = ${pvLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit}` }),
+          posthogQuery({ host, projectId, apiKey, name: "Batch: total product views",
+            query: `select count() as count from events where event = ${prLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit}` }),
+          posthogQuery({ host, projectId, apiKey, name: "Batch: total add to cart",
+            query: `select count() as count from events where event = ${atcLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit}` }),
+          posthogQuery({ host, projectId, apiKey, name: "Batch: total checkout",
+            query: `select count() as count from events where event = ${coLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit}` }),
+          posthogQuery({ host, projectId, apiKey, name: "Batch: total purchase",
+            query: `select count() as count from events where event = ${purLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit}` }),
+          // Time series
+          posthogQuery({ host, projectId, apiKey, name: "Batch: pageview series",
+            query: `select ${bucketExpr} as day, count() as count from events where event = ${pvLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} group by day order by day` }),
+          posthogQuery({ host, projectId, apiKey, name: "Batch: purchase series",
+            query: `select ${bucketExpr} as day, count() as count from events where event = ${purLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} group by day order by day` }),
+          // Top properties
+          posthogQuery({ host, projectId, apiKey, name: "Batch: top URLs",
+            query: `select properties.$current_url as value, count() as count from events where event = ${pvLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} group by value order by count desc limit 10` }),
+          posthogQuery({ host, projectId, apiKey, name: "Batch: top products",
+            query: `select properties.${isValidPropKey(productPropKey) ? productPropKey : "productId"} as value, count() as count from events where event = ${prLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} group by value order by count desc limit 10` }),
+          // Recent events
+          posthogQuery({ host, projectId, apiKey, name: "Batch: recent events",
+            query: `select timestamp, event, distinct_id, properties.$current_url as url, properties.$geoip_country_code as country, properties.$geoip_subdivision_1_name as state, properties.$geoip_city_name as city, properties.$session_id as session_id from events where timestamp >= ${dateFromLit} and event != '$snapshot' order by timestamp desc limit 30` }),
+          // Geo
+          posthogQuery({ host, projectId, apiKey, name: "Batch: India states",
+            query: `select coalesce(properties.$geoip_subdivision_1_name, 'Unknown') as value, count() as count from events where event = ${pvLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} and properties.$geoip_country_code = 'IN' group by value order by count desc limit 12` }),
+          posthogQuery({ host, projectId, apiKey, name: "Batch: India cities",
+            query: `select coalesce(properties.$geoip_city_name, 'Unknown') as value, count() as count from events where event = ${pvLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} and properties.$geoip_country_code = 'IN' group by value order by count desc limit 12` }),
+          // Traffic sources
+          posthogQuery({ host, projectId, apiKey, name: "Batch: traffic sources",
+            query: `select ${sourceExpr} as value, count() as count from events where event = ${pvLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} group by value order by count desc limit 12` }),
+          // Active users
+          posthogQuery({ host, projectId, apiKey, name: "Batch: active users",
+            query: `select distinct_id, count() as count, max(timestamp) as last_seen from events where event = ${pvLit} and timestamp >= ${dateFromLit} and timestamp < ${dateToLit} group by distinct_id order by count desc limit 12` }),
+        ]);
+
+        res.json({
+          pageviewsTotal: pvTotalRes?.results ?? [],
+          productViewsTotal: prTotalRes?.results ?? [],
+          addToCartTotal: atcTotalRes?.results ?? [],
+          checkoutTotal: coTotalRes?.results ?? [],
+          purchaseTotal: purTotalRes?.results ?? [],
+          pageviewsSeries: pvSeriesRes?.results ?? [],
+          purchaseSeries: purSeriesRes?.results ?? [],
+          topUrls: topUrlRes?.results ?? [],
+          topProducts: topProdRes?.results ?? [],
+          recent: recentRes?.results ?? [],
+          indiaStates: indiaStatesRes?.results ?? [],
+          indiaCities: indiaCitiesRes?.results ?? [],
+          trafficSources: trafficSourcesRes?.results ?? [],
+          activeUsers: activeUsersRes?.results ?? [],
+        });
+        return;
+      }
 
       if (data.report === "event_definitions") {
         const lim = getSafeLimit(data.limit, 200, 500);

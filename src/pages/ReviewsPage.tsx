@@ -34,6 +34,34 @@ const clampRating = (n: unknown) => {
 
 const normalize = (v: unknown) => String(v ?? "").toLowerCase();
 
+const ReviewRowSkeleton = () => (
+  <tr className="animate-pulse">
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-full"></div>
+    </td>
+    <td className="px-5 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-2/3"></div>
+    </td>
+    <td className="px-5 py-4 text-right">
+      <div className="flex justify-end gap-2">
+        <div className="h-7 w-12 bg-neutral-700 rounded-full"></div>
+        <div className="h-7 w-16 bg-neutral-700 rounded-full"></div>
+      </div>
+    </td>
+  </tr>
+);
+
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [productsById, setProductsById] = useState<Record<string, ProductLite>>({});
@@ -224,8 +252,24 @@ export default function ReviewsPage() {
       </section>
 
       {loading && (
-        <div className="rounded-2xl border border-neutral-800 p-6 text-neutral-300">
-          Loading reviews…
+        <div className="rounded-2xl border border-neutral-800 overflow-hidden bg-neutral-900/60 animate-pulse">
+          <table className="min-w-full divide-y divide-neutral-800 text-sm">
+            <thead className="bg-neutral-950/80">
+              <tr className="text-neutral-400">
+                <th className="px-5 py-3 text-left text-xs font-medium">Product</th>
+                <th className="px-5 py-3 text-left text-xs font-medium">User</th>
+                <th className="px-5 py-3 text-left text-xs font-medium">Rating</th>
+                <th className="px-5 py-3 text-left text-xs font-medium">Review</th>
+                <th className="px-5 py-3 text-left text-xs font-medium">Created</th>
+                <th className="px-5 py-3 text-right text-xs font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-800">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <ReviewRowSkeleton key={i} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

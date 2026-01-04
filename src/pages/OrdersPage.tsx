@@ -65,6 +65,47 @@ type SortKey = "created_desc" | "created_asc" | "total_desc" | "total_asc";
 
 const PAGE_SIZES = [10, 20, 50] as const;
 
+const STATUS_STYLES: Record<string, { bg: string; text: string; icon: string }> = {
+  pending: { bg: "bg-amber-500/15", text: "text-amber-300", icon: "⏳" },
+  paid: { bg: "bg-blue-500/15", text: "text-blue-300", icon: "💳" },
+  shipped: { bg: "bg-purple-500/15", text: "text-purple-300", icon: "📦" },
+  delivered: { bg: "bg-emerald-500/15", text: "text-emerald-300", icon: "✅" },
+  cancelled: { bg: "bg-red-500/15", text: "text-red-300", icon: "❌" },
+  failed: { bg: "bg-red-500/15", text: "text-red-300", icon: "⚠️" },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const style = STATUS_STYLES[status] || STATUS_STYLES.pending;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] sm:text-[11px] font-medium ${style.bg} ${style.text}`}>
+      <span className="text-[10px]">{style.icon}</span>
+      {status}
+    </span>
+  );
+}
+
+const OrderRowSkeleton = () => (
+  <tr className="animate-pulse">
+    <td className="px-4 sm:px-6 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-4 sm:px-6 py-4">
+      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
+      <div className="mt-2 h-3 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
+      <div className="h-4 bg-neutral-700 rounded w-1/2"></div>
+    </td>
+    <td className="px-4 sm:px-6 py-4">
+      <div className="h-6 bg-neutral-700 rounded-full w-20"></div>
+    </td>
+    <td className="px-4 sm:px-6 py-4 text-right">
+      <div className="h-7 bg-neutral-700 rounded-full w-14 inline-block"></div>
+    </td>
+  </tr>
+);
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -330,171 +371,218 @@ export default function OrdersPage() {
       title="Orders"
       subtitle="Review customer orders and manage their status."
     >
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-neutral-400">Status</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-            >
-              <option value="all">All</option>
-              <option value="open">Open (pending → shipped)</option>
-              <option value="closed">Closed (delivered / failed / cancelled)</option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-neutral-400">Sort</span>
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-            >
-              <option value="created_desc">Newest first</option>
-              <option value="created_asc">Oldest first</option>
-              <option value="total_desc">Total: high → low</option>
-              <option value="total_asc">Total: low → high</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-neutral-400">Page size</span>
-            <select
-              value={pageSize}
-              onChange={(e) =>
-                setPageSize(Number(e.target.value) as (typeof PAGE_SIZES)[number])
-              }
-              className="rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2"
-            >
-              {PAGE_SIZES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
+      {/* Filters - Mobile optimized */}
+      <div className="mb-4 sm:mb-6 space-y-3">
+        {/* Search - Full width on mobile */}
+        <div className="relative">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by order id, customer, status…"
-            className="w-full md:w-80 rounded-lg border border-neutral-700 bg-neutral-900 text-[12px] text-neutral-100 px-3 py-2 placeholder:text-neutral-500"
+            placeholder="Search orders..."
+            className="w-full rounded-xl border border-neutral-700 bg-neutral-950/60 text-sm text-neutral-100 px-4 py-3 pl-10 placeholder:text-neutral-500 focus:border-yellow-500/50 focus:outline-none transition"
           />
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500">🔍</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            disabled={loading}
-            onClick={loadFirstPage}
-            className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-900 transition disabled:opacity-60"
+        {/* Filters Row */}
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="flex-1 min-w-[120px] rounded-xl border border-neutral-700 bg-neutral-950/60 text-[11px] sm:text-[12px] text-neutral-100 px-3 py-2 focus:border-yellow-500/50 focus:outline-none"
           >
-            Refresh
-          </button>
-          <button
-            disabled={loading || pageIndex === 0}
-            onClick={loadPrevPage}
-            className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-900 transition disabled:opacity-60"
+            <option value="all">All Status</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="flex-1 min-w-[100px] rounded-xl border border-neutral-700 bg-neutral-950/60 text-[11px] sm:text-[12px] text-neutral-100 px-3 py-2 focus:border-yellow-500/50 focus:outline-none"
           >
-            Prev
-          </button>
-          <button
-            disabled={loading || !hasNext}
-            onClick={loadNextPage}
-            className="text-[11px] rounded-full border border-neutral-700 px-3 py-1.5 text-neutral-200 hover:bg-neutral-900 transition disabled:opacity-60"
+            <option value="created_desc">Newest</option>
+            <option value="created_asc">Oldest</option>
+            <option value="total_desc">High → Low</option>
+            <option value="total_asc">Low → High</option>
+          </select>
+
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value) as (typeof PAGE_SIZES)[number])}
+            className="w-16 rounded-xl border border-neutral-700 bg-neutral-950/60 text-[11px] sm:text-[12px] text-neutral-100 px-2 py-2 focus:border-yellow-500/50 focus:outline-none"
           >
-            Next
-          </button>
-          <span className="text-[11px] text-neutral-500">
-            Page {pageIndex + 1}
-          </span>
+            {PAGE_SIZES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              disabled={loading}
+              onClick={loadFirstPage}
+              className="inline-flex items-center gap-1.5 text-[11px] rounded-xl border border-neutral-700 px-3 py-2 text-neutral-200 hover:bg-yellow-500/10 hover:border-yellow-500/40 transition disabled:opacity-50"
+            >
+              <span className={loading ? "animate-spin" : ""}>↻</span>
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              disabled={loading || pageIndex === 0}
+              onClick={loadPrevPage}
+              className="text-[11px] rounded-xl border border-neutral-700 px-3 py-2 text-neutral-200 hover:bg-neutral-800 transition disabled:opacity-40"
+            >
+              ← Prev
+            </button>
+            <span className="text-[11px] text-neutral-400 bg-neutral-800/50 px-3 py-2 rounded-xl">
+              {pageIndex + 1}
+            </span>
+            <button
+              disabled={loading || !hasNext}
+              onClick={loadNextPage}
+              className="text-[11px] rounded-xl border border-neutral-700 px-3 py-2 text-neutral-200 hover:bg-neutral-800 transition disabled:opacity-40"
+            >
+              Next →
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-2xl border border-red-700 bg-red-900/10 p-4 text-[12px] text-red-300">
-          {error}
+        <div className="mb-4 rounded-2xl border border-red-500/30 bg-gradient-to-r from-red-950/40 to-red-900/20 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-lg">⚠️</span>
+            <div>
+              <p className="text-sm font-medium text-red-200">Error loading orders</p>
+              <p className="text-[12px] text-red-300/80 mt-1">{error}</p>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="rounded-2xl overflow-hidden border border-neutral-800">
-        <table className="min-w-full divide-y divide-neutral-800">
-          <thead className="bg-neutral-900/60">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400">Order</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400">Customer</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400">Total</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400">Status</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-neutral-400">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-800">
-            {loading && (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-neutral-400">
-                  Loading orders…
-                </td>
-              </tr>
-            )}
+      {/* Mobile Card View */}
+      <div className="sm:hidden space-y-3">
+        {loading && Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-4 animate-pulse">
+            <div className="flex justify-between items-start">
+              <div className="space-y-2 flex-1">
+                <div className="h-4 bg-neutral-700 rounded w-1/2"></div>
+                <div className="h-3 bg-neutral-700 rounded w-3/4"></div>
+              </div>
+              <div className="h-6 w-16 bg-neutral-700 rounded-full"></div>
+            </div>
+          </div>
+        ))}
 
-            {!loading && filteredOrders.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-neutral-400">
-                  No orders found.
-                </td>
-              </tr>
-            )}
+        {!loading && filteredOrders.length === 0 && (
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-8 text-center">
+            <div className="text-4xl mb-3 opacity-40">📋</div>
+            <p className="text-sm text-neutral-400">No orders found</p>
+          </div>
+        )}
 
-            {!loading &&
-              filteredOrders.map((o) => (
-                <tr key={o.id} className="bg-neutral-950/40 hover:bg-neutral-900/40 transition">
-                  <td className="px-6 py-4">
+        {!loading && filteredOrders.map((o) => (
+          <Link
+            key={o.id}
+            to={`/orders/${o.id}`}
+            className="block rounded-xl border border-neutral-800 bg-neutral-950/60 p-4 hover:border-yellow-500/40 hover:bg-neutral-900/60 transition"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-yellow-200">
+                    #{o.displayId || o.id.slice(0, 8)}
+                  </span>
+                  <StatusBadge status={o.status || "pending"} />
+                </div>
+                <div className="text-xs text-neutral-400 mt-1">
+                  {o.user?.name || "Anonymous"} · {formatOrderDate(o.createdAt)?.split(",")[0]}
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="text-sm font-semibold text-emerald-300">
+                  {o.currency || "₹"} {typeof o.total === "number" ? o.total.toLocaleString("en-IN") : "—"}
+                </div>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden sm:block rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-950/60">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-neutral-800/60">
+            <thead className="bg-neutral-900/60">
+              <tr>
+                <th className="px-4 sm:px-6 py-3.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Order</th>
+                <th className="px-4 sm:px-6 py-3.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Customer</th>
+                <th className="px-4 sm:px-6 py-3.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider hidden md:table-cell">Total</th>
+                <th className="px-4 sm:px-6 py-3.5 text-left text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Status</th>
+                <th className="px-4 sm:px-6 py-3.5 text-right text-[10px] sm:text-xs font-medium text-neutral-400 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-800/40">
+              {loading && Array.from({ length: pageSize }).map((_, i) => <OrderRowSkeleton key={i} />)}
+
+              {!loading && filteredOrders.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center">
+                    <div className="text-4xl mb-3 opacity-40">📋</div>
+                    <p className="text-sm text-neutral-400">No orders found</p>
+                  </td>
+                </tr>
+              )}
+
+              {!loading && filteredOrders.map((o) => (
+                <tr key={o.id} className="bg-neutral-950/20 hover:bg-neutral-900/50 transition group">
+                  <td className="px-4 sm:px-6 py-4">
                     <div className="flex flex-col">
-                      <Link to={`/orders/${o.id}`} className="text-sm font-medium text-yellow-200 hover:underline">
-                        #{o.displayId || o.id}
+                      <Link to={`/orders/${o.id}`} className="text-sm font-medium text-yellow-200 hover:underline group-hover:text-yellow-100">
+                        #{o.displayId || o.id.slice(0, 8)}
                       </Link>
-                      <span className="text-[11px] text-neutral-400">
+                      <span className="text-[10px] sm:text-[11px] text-neutral-500 mt-0.5">
                         {formatOrderDate(o.createdAt)}
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-4 sm:px-6 py-4">
                     <div className="text-sm text-neutral-200">
-                      {o.user?.name || "—"}
+                      {o.user?.name || <span className="text-neutral-500">Anonymous</span>}
                     </div>
-                    <div className="text-[11px] text-neutral-400">
+                    <div className="text-[10px] sm:text-[11px] text-neutral-500 mt-0.5 truncate max-w-[150px]">
                       {o.user?.phone || o.user?.email || "—"}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-neutral-200">
-                    {o.currency || "INR"}{" "}
-                    {typeof o.total === "number"
-                      ? o.total.toLocaleString("en-IN")
-                      : "—"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[11px] px-2 py-1 rounded-full border border-neutral-700 bg-neutral-900 text-neutral-200">
-                      {o.status || "pending"}
+                  <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-300">
+                      {o.currency || "₹"} {typeof o.total === "number" ? o.total.toLocaleString("en-IN") : "—"}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-4 sm:px-6 py-4">
+                    <StatusBadge status={o.status || "pending"} />
+                  </td>
+                  <td className="px-4 sm:px-6 py-4 text-right">
                     <Link
                       to={`/orders/${o.id}`}
-                      className="text-[11px] rounded-full border border-yellow-500/60 px-3 py-1.5 text-yellow-200 hover:bg-yellow-500/10 transition"
+                      className="text-[11px] rounded-full border border-yellow-500/50 px-3 py-1.5 text-yellow-200 hover:bg-yellow-500/10 hover:border-yellow-500 transition font-medium"
                     >
-                      View
+                      View →
                     </Link>
                   </td>
                 </tr>
               ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </AdminLayout>
   );

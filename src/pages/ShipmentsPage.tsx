@@ -65,6 +65,44 @@ const asCouriers = (value: unknown): Courier[] => {
   return Object.values(byId).sort((a, b) => a.name.localeCompare(b.name));
 };
 
+const ShipmentsPageSkeleton = () => (
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
+    <div className="lg:col-span-2 space-y-6">
+      {/* Shipping rates */}
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div className="h-4 bg-neutral-700 rounded w-1/4 mb-1"></div>
+            <div className="h-9 bg-neutral-800 rounded w-full"></div>
+          </div>
+          <div>
+            <div className="h-4 bg-neutral-700 rounded w-1/4 mb-1"></div>
+            <div className="h-9 bg-neutral-800 rounded w-full"></div>
+          </div>
+        </div>
+      </div>
+      {/* Courier whitelist */}
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+        <div className="h-20 bg-neutral-800 rounded w-full"></div>
+      </div>
+      {/* Pincodes */}
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+        <div className="h-32 bg-neutral-800 rounded w-full"></div>
+      </div>
+    </div>
+    <div className="space-y-6">
+      {/* Nimbuspost */}
+      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/2 mb-4"></div>
+        <div className="h-9 bg-neutral-800 rounded w-full"></div>
+      </div>
+    </div>
+  </div>
+);
+
 export default function ShipmentsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -237,11 +275,7 @@ export default function ShipmentsPage() {
         </button>
       }
     >
-      {loading && (
-        <div className="rounded-2xl border border-neutral-800 p-6 text-neutral-300">
-          Loading shipment settings…
-        </div>
-      )}
+      {loading && <ShipmentsPageSkeleton />}
 
       {!loading && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

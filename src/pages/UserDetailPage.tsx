@@ -51,6 +51,35 @@ const composeName = (obj: any): string | undefined => {
   return finalName && finalName.trim().length ? finalName : undefined;
 };
 
+const UserDetailPageSkeleton = () => (
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
+    <div className="lg:col-span-2 space-y-6">
+      {/* Profile */}
+      <div className="rounded-2xl border border-neutral-800 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/4 mb-4"></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="h-16 bg-neutral-800 rounded-xl"></div>
+          <div className="h-16 bg-neutral-800 rounded-xl"></div>
+          <div className="h-16 bg-neutral-800 rounded-xl"></div>
+          <div className="h-16 bg-neutral-800 rounded-xl"></div>
+        </div>
+      </div>
+      {/* Orders */}
+      <div className="rounded-2xl border border-neutral-800 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/4 mb-4"></div>
+        <div className="h-32 bg-neutral-800 rounded-xl"></div>
+      </div>
+    </div>
+    <div className="space-y-6">
+      {/* Raw Data */}
+      <div className="rounded-2xl border border-neutral-800 p-6">
+        <div className="h-5 bg-neutral-700 rounded w-1/4 mb-4"></div>
+        <div className="h-64 bg-neutral-800 rounded-xl"></div>
+      </div>
+    </div>
+  </div>
+);
+
 export default function UserDetailPage() {
   const { userId } = useParams();
   const [user, setUser] = useState<UserDetail | null>(null);
@@ -140,11 +169,7 @@ export default function UserDetailPage() {
         </div>
       }
     >
-      {loading && (
-        <div className="rounded-2xl border border-neutral-800 p-6 text-neutral-300">
-          Loading…
-        </div>
-      )}
+      {loading && <UserDetailPageSkeleton />}
 
       {!loading && error && (
         <div className="rounded-2xl border border-red-700 bg-red-900/10 p-6 text-red-300">

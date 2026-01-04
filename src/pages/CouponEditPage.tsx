@@ -77,6 +77,93 @@ const asDateInputValue = (value: any) => {
   }
 };
 
+const CouponEditPageSkeleton = () => {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-pulse">
+      <div className="lg:col-span-2 space-y-6">
+        {/* Section 1: Coupon Code and Title */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+          </div>
+          <div className="mt-4 h-6 bg-neutral-700 rounded w-1/4"></div>
+        </div>
+
+        {/* Section 2: Discount */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6">
+          <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Eligibility */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6">
+          <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Section 4: Dates and Limits */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6">
+          <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+            <div>
+              <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+              <div className="mt-2 h-9 bg-neutral-800 rounded w-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column: Preview */}
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6">
+          <div className="h-5 bg-neutral-700 rounded w-1/3 mb-4"></div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4 space-y-4">
+            <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
+            <div className="h-5 bg-neutral-800 rounded w-1/2"></div>
+            <div className="h-4 bg-neutral-700 rounded w-1/4 mt-3"></div>
+            <div className="h-5 bg-neutral-800 rounded w-1/2"></div>
+            <div className="h-4 bg-neutral-700 rounded w-1/4 mt-3"></div>
+            <div className="h-5 bg-neutral-800 rounded w-1/2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function CouponEditPage() {
   const { code } = useParams();
   const isNew = !code;
@@ -333,9 +420,7 @@ export default function CouponEditPage() {
       )}
 
       {loading ? (
-        <div className="rounded-2xl border border-neutral-800 p-6 text-neutral-300">
-          Loading coupon…
-        </div>
+        <CouponEditPageSkeleton />
       ) : (
         <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">

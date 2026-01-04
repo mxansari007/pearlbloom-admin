@@ -12,18 +12,18 @@ type AdminLayoutProps = {
 };
 
 const navItems = [
-  { to: "/", label: "Dashboard" },
-  { to: "/analytics", label: "Analytics" },
-  { to: "/products", label: "Products" },
-  { to: "/collections", label: "Collections" },
-  { to: "/homepage", label: "Homepage" },
-  { to: "/orders", label: "Orders" },
-  { to: "/coupons", label: "Coupons" },
-  { to: "/shipments", label: "Shipments" },
-  { to: "/users", label: "Users" },
-  { to: "/reviews", label: "Reviews" },
-  { to: "/chats", label: "Chats", notify: true }, // 🔥 NEW
-  { to: "/settings", label: "Settings" },
+  { to: "/", label: "Dashboard", icon: "📊" },
+  { to: "/analytics", label: "Analytics", icon: "📈" },
+  { to: "/products", label: "Products", icon: "💎" },
+  { to: "/collections", label: "Collections", icon: "🏷️" },
+  { to: "/homepage", label: "Homepage", icon: "🏠" },
+  { to: "/orders", label: "Orders", icon: "📦" },
+  { to: "/coupons", label: "Coupons", icon: "🎟️" },
+  { to: "/shipments", label: "Shipments", icon: "🚚" },
+  { to: "/users", label: "Users", icon: "👥" },
+  { to: "/reviews", label: "Reviews", icon: "⭐" },
+  { to: "/chats", label: "Chats", icon: "💬", notify: true },
+  { to: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export default function AdminLayout({
@@ -73,22 +73,22 @@ export default function AdminLayout({
 
   return (
     <div className="h-screen bg-neutral-950 text-white flex overflow-hidden">
-      <aside className="hidden md:flex w-64 flex-col border-r border-neutral-800/80">
-        <div className="px-5 py-5 border-b border-neutral-800/80">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-full bg-yellow-500/10 border border-yellow-500/40 flex items-center justify-center text-xs">
+      <aside className="hidden md:flex w-64 flex-col border-r border-neutral-800/60 bg-neutral-950/80">
+        <div className="px-5 py-5 border-b border-neutral-800/60">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/10 border border-yellow-500/30 flex items-center justify-center text-sm font-semibold text-yellow-300 group-hover:scale-105 transition-transform">
               PB
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.18em] text-neutral-400">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-yellow-400/80 font-medium">
                 Pearl Bloom
               </p>
-              <p className="text-xs text-neutral-200">Admin console</p>
+              <p className="text-xs text-neutral-300">Admin Console</p>
             </div>
           </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-[13px]">
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {navItems.map((item) => (
             <SideNavLink
               key={item.to}
@@ -96,9 +96,12 @@ export default function AdminLayout({
               active={isActive(location.pathname, item.to)}
             >
               <span className="flex items-center justify-between w-full">
-                <span className="text-sm">{item.label}</span>
+                <span className="flex items-center gap-2.5">
+                  <span className="text-sm opacity-70">{item.icon}</span>
+                  <span className="text-[13px]">{item.label}</span>
+                </span>
                 {item.notify && unreadChats > 0 && (
-                  <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
+                  <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded-full font-medium animate-pulse">
                     {unreadChats}
                   </span>
                 )}
@@ -107,12 +110,13 @@ export default function AdminLayout({
           ))}
         </nav>
 
-        <div className="p-4 border-t border-neutral-800/80">
+        <div className="p-4 border-t border-neutral-800/60">
           <button
             onClick={handleLogout}
-            className="w-full text-[12px] rounded-lg border border-neutral-700 px-3 py-2 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
+            className="w-full text-[12px] rounded-xl border border-neutral-700/60 px-3 py-2.5 text-neutral-400 hover:border-red-500/50 hover:text-red-300 hover:bg-red-950/30 transition flex items-center justify-center gap-2"
           >
-            Logout
+            <span>🚪</span>
+            <span>Sign out</span>
           </button>
         </div>
       </aside>
@@ -188,21 +192,24 @@ export default function AdminLayout({
                 </Link>
               </div>
 
-              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 text-[13px]">
+              <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
                 {navItems.map((item) => (
                   <Link
                     key={item.to}
                     to={item.to}
                     onClick={handleNavClick}
-                    className={`w-full px-3 py-2 rounded-lg flex items-center justify-between transition ${
+                    className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition ${
                       isActive(location.pathname, item.to)
-                        ? "bg-neutral-900 text-yellow-200 border border-yellow-500/60"
+                        ? "bg-yellow-500/10 text-yellow-200 border border-yellow-500/50"
                         : "text-neutral-300 border border-transparent hover:bg-neutral-900 hover:text-yellow-100"
                     }`}
                   >
-                    <span className="text-sm">{item.label}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-base">{item.icon}</span>
+                      <span className="text-sm">{item.label}</span>
+                    </span>
                     {item.notify && unreadChats > 0 && (
-                      <span className="bg-yellow-500 text-black text-[10px] px-2 py-[1px] rounded-full">
+                      <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">
                         {unreadChats}
                       </span>
                     )}
@@ -222,22 +229,22 @@ export default function AdminLayout({
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto">
-          <main className="max-w-6xl mx-auto py-8 px-4">
+        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-neutral-950 to-neutral-900/50">
+          <main className="max-w-6xl mx-auto py-4 sm:py-6 md:py-8 px-4 sm:px-6">
             {(title || subtitle || actions) && (
-              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="mb-4 sm:mb-6 flex flex-col gap-2 sm:gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   {title && (
-                    <h1 className="text-2xl font-semibold tracking-tight">
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
                       {title}
                     </h1>
                   )}
                   {subtitle && (
-                    <p className="text-sm text-neutral-400 mt-1">{subtitle}</p>
+                    <p className="text-xs sm:text-sm text-neutral-400 mt-1">{subtitle}</p>
                   )}
                 </div>
                 {actions && (
-                  <div className="flex items-center gap-2">{actions}</div>
+                  <div className="flex items-center gap-2 flex-wrap">{actions}</div>
                 )}
               </div>
             )}
@@ -264,10 +271,10 @@ function SideNavLink({
   return (
     <Link
       to={to}
-      className={`w-full px-3 py-2 rounded-lg flex items-center transition ${
+      className={`w-full px-3 py-2.5 rounded-xl flex items-center transition-all ${
         active
-          ? "bg-neutral-900 text-yellow-200 border border-yellow-500/60"
-          : "text-neutral-300 hover:bg-neutral-900 hover:text-yellow-100 border border-transparent"
+          ? "bg-yellow-500/10 text-yellow-200 border border-yellow-500/40 shadow-sm shadow-yellow-500/5"
+          : "text-neutral-400 hover:bg-neutral-900/60 hover:text-neutral-200 border border-transparent"
       }`}
     >
       {children}
