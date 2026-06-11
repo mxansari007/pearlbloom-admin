@@ -1,0 +1,125 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pearlbloom Firestore security rules (shared by the storefront + admin app).
+//
+// The storefront client (phone-OTP auth) and the admin app (email/password
+// auth) both talk to this database with the *client* SDK, so these rules are
+// the only thing standing between a logged-in customer and every other
+// customer's data. Server API routes use the Admin SDK, which BYPASSES these
+// rules entirely — so nothing here can break the Razorpay/coupon endpoints.
+//
+// ⚠️  LOCK-OUT WARNING — READ BEFORE DEPLOYING ⚠️
+// Until Admin issue #1 sets a custom `admin:true` claim, the email allowlist in
+// adminEmails() below is the ONLY thing that lets the admin app write products,
+// collections, coupons, settings and orders. If you deploy these rules with the
+// placeholder still in place, the admin app will be unable to save anything.
+// Replace the placeholder with the exact email(s) you sign into the admin app
+// with FIRST, then deploy:  firebase deploy --only firestore:rules
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // TODO: replace with the real admin email(s) before deploying.
+    function adminEmails() {
+      return ['REPLACE_WITH_ADMIN_EMAIL@example.com'];
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        (request.auth.token.email != null && request.auth.token.email in adminEmails())
+      );
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── Public catalog: world-readable, admin-only writes ──────────────────
+    match /products/{id}     { allow read: if true;  allow write: if isAdmin(); }
+    match /collections/{id}  { allow read: if true;  allow write: if isAdmin(); }
+    match /siteSettings/{id} { allow read: if true;  allow write: if isAdmin(); }
+
+    // ── Coupons: only the admin app touches these from the client; the
+    //    storefront validates them server-side (Admin SDK, bypasses rules). ──
+    match /coupons/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── Orders ─────────────────────────────────────────────────────────────
+    match /orders/{id} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+
+      // A customer may create only their OWN order and may not self-declare it
+      // paid — the server flips status to "paid" via the Admin SDK.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status != 'paid';
+
+      // A customer may patch their own order (e.g. the displayId written right
+      // after creation) but may not change the owner, the total, or mark it
+      // paid. Admin may do anything.
+      allow update: if isAdmin() || (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.total == resource.data.total
+        && request.resource.data.status != 'paid'
+      );
+
+      // A customer may cancel/delete only an UNPAID order; admin may delete any.
+      allow delete: if isAdmin() || (
+        isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && resource.data.status != 'paid'
+      );
+    }
+
+    // ── Reviews: world-readable (shown on product pages), authored by the
+    //    signed-in user, mutated only by admin. ─────────────────────────────
+    // NOTE: rules can't prove the author actually purchased the product; the
+    // `verified` flag is therefore advisory. Tightening would need a server
+    // route that mints reviews after confirming a delivered order.
+    match /reviews/{id} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Per-user data: the user doc plus every nested subcollection
+    //    (addresses, orders mirror) is private to that user. ────────────────
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid);
+
+      match /{sub=**} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow write: if isOwner(uid);
+      }
+    }
+
+    // ── Support chats: scoped to the uid stamped on the chat doc (the chatId
+    //    itself is phone-derived, which rules can't tie to the caller). ─────
+    match /chats/{chatId} {
+      allow read, write: if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid)
+        || (isSignedIn() && request.resource.data.uid == request.auth.uid);
+
+      match /messages/{msgId} {
+        allow read, write: if isAdmin()
+          || (isSignedIn()
+              && get(/databases/$(database)/documents/chats/$(chatId)).data.uid == request.auth.uid);
+      }
+    }
+
+    // Anything not matched above is denied by default.
+  }
+}
