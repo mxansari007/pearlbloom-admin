@@ -485,10 +485,34 @@ export default function ProductEditPage() {
     setError(null);
 
     try {
-      const idToUse = isNew ? crypto.randomUUID() : id!;
-      const productRef = doc(db, "products", idToUse);
-
       const slugToSave = form.slug || slugify(form.name);
+
+      // New products are KEYED BY THEIR SLUG so the storefront can read them
+      // with a direct doc(slug) get instead of a costly where("slug","==")
+      // query. Nothing else enforces slug uniqueness, so guard against
+      // collisions here (a clashing slug would otherwise silently overwrite
+      // a different product, since the doc id is now the slug).
+      let idToUse: string;
+      if (isNew) {
+        const clash = await getDoc(doc(db, "products", slugToSave));
+        if (clash.exists()) {
+          setError(
+            `A product with the slug "${slugToSave}" already exists. ` +
+              `Choose a different slug.`
+          );
+          setSaving(false);
+          return;
+        }
+        idToUse = slugToSave;
+      } else {
+        // Editing keeps the existing document id. After the one-time
+        // migration that id already equals the slug; if an admin renames a
+        // slug the doc id stays put (moving it would orphan cart/wishlist
+        // references) and the storefront read simply falls back to a query
+        // for that one product.
+        idToUse = id!;
+      }
+      const productRef = doc(db, "products", idToUse);
 
       const inventoryToSave = {
         trackStock: Boolean(form.inventory?.trackStock),
