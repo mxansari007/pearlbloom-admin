@@ -21,9 +21,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // TODO: replace with the real admin email(s) before deploying.
+    // Admin email allowlist (lock-out-safe fallback until the custom `admin`
+    // claim is provisioned). Compared lower-cased — keep entries lower-case.
     function adminEmails() {
-      return ['REPLACE_WITH_ADMIN_EMAIL@example.com'];
+      return ['mxansari007@gmail.com'];
     }
 
     function isSignedIn() {
@@ -33,7 +34,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.admin == true ||
-        (request.auth.token.email != null && request.auth.token.email in adminEmails())
+        (request.auth.token.email != null && request.auth.token.email.lower() in adminEmails())
       );
     }
 
