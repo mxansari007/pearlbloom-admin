@@ -25,12 +25,12 @@ function getAllowedOrigins() {
  */
 function setCorsHeaders(res, origin) {
     const allowed = getAllowedOrigins();
-    if (origin) {
+    // Only reflect the Origin back when it's on the allowlist. Reflecting an
+    // arbitrary Origin lets any site make credentialed cross-origin calls.
+    if (origin && allowed.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Vary", "Origin");
-        if (allowed.includes(origin)) {
-            res.setHeader("Access-Control-Allow-Credentials", "true");
-        }
+        res.setHeader("Access-Control-Allow-Credentials", "true");
     }
     res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");

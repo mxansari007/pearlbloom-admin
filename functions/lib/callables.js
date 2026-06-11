@@ -8,6 +8,7 @@ const uploadHandler_1 = require("./handlers/uploadHandler");
 const cloudinary_1 = require("./lib/cloudinary");
 const https_2 = require("firebase-functions/v2/https");
 const nimbuspost_1 = require("./lib/nimbuspost");
+const auth_1 = require("./lib/auth");
 /**
  * onCall: uploadImage
  * secrets are declared here so runtime will inject them.
@@ -16,8 +17,7 @@ exports.uploadImageCallable = (0, https_1.onCall)({
     region: "us-central1",
 }, async (req) => {
     try {
-        // optional auth check:
-        // if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+        (0, auth_1.requireAdminCallable)(req);
         return await (0, uploadHandler_1.handleUploadBase64)(req.data);
     }
     catch (err) {
@@ -34,6 +34,7 @@ exports.deleteImageCallable = (0, https_1.onCall)({
     region: "us-central1",
 }, async (req) => {
     try {
+        (0, auth_1.requireAdminCallable)(req);
         const { public_id } = req.data || {};
         if (!public_id)
             throw new https_2.HttpsError("invalid-argument", "public_id required");

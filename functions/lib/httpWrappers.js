@@ -9,6 +9,7 @@ const cloudinary_1 = require("./lib/cloudinary");
 const firebase_functions_1 = require("firebase-functions");
 const auth_1 = require("firebase-admin/auth");
 const app_1 = require("firebase-admin/app");
+const auth_2 = require("./lib/auth");
 /**
  * HTTP wrapper for upload (lowercase name `uploadimage`).
  * Accepts JSON POST body: { filename, base64, mimeType }
@@ -25,6 +26,8 @@ exports.uploadImageHttp = v2_1.https.onRequest(async (req, res) => {
             res.status(405).json({ error: "Method Not Allowed" });
             return;
         }
+        if (!(await (0, auth_2.requireAdminHttp)(req, res)))
+            return;
         const body = req.body || {};
         try {
             const payload = await (0, uploadHandler_1.handleUploadBase64)(body);
@@ -61,6 +64,8 @@ exports.deleteImageHttp = v2_1.https.onRequest(async (req, res) => {
             res.status(405).json({ error: "Method Not Allowed" });
             return;
         }
+        if (!(await (0, auth_2.requireAdminHttp)(req, res)))
+            return;
         const { public_id } = req.body || {};
         if (!public_id) {
             res.status(400).json({ error: "public_id required" });
