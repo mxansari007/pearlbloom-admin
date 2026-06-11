@@ -7,6 +7,7 @@ import { configureCloudinary, destroyImage } from "./lib/cloudinary";
 import { logger } from "firebase-functions";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp } from "firebase-admin/app";
+import { requireAdminHttp } from "./lib/auth";
 
 /**
  * HTTP wrapper for upload (lowercase name `uploadimage`).
@@ -26,6 +27,8 @@ export const uploadImageHttp = https.onRequest(async (req: Request, res: Respons
       res.status(405).json({ error: "Method Not Allowed" });
       return;
     }
+
+    if (!(await requireAdminHttp(req, res))) return;
 
     const body = req.body || {};
     try {
@@ -63,6 +66,8 @@ export const deleteImageHttp = https.onRequest(async (req: Request, res: Respons
       res.status(405).json({ error: "Method Not Allowed" });
       return;
     }
+
+    if (!(await requireAdminHttp(req, res))) return;
 
     const { public_id } = req.body || {};
     if (!public_id) {

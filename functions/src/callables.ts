@@ -5,6 +5,7 @@ import { handleUploadBase64 } from "./handlers/uploadHandler";
 import { configureCloudinary, destroyImage } from "./lib/cloudinary";
 import { HttpsError } from "firebase-functions/v2/https";
 import { nimbuspostGetCouriers } from "./lib/nimbuspost";
+import { requireAdminCallable } from "./lib/auth";
 
 /**
  * onCall: uploadImage
@@ -16,8 +17,7 @@ export const uploadImageCallable = onCall(
   },
   async (req: CallableRequest<any>) => {
     try {
-      // optional auth check:
-      // if (!req.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+      requireAdminCallable(req);
 
       return await handleUploadBase64(req.data);
     } catch (err: any) {
@@ -37,6 +37,8 @@ export const deleteImageCallable = onCall(
   },
   async (req: CallableRequest<any>) => {
     try {
+      requireAdminCallable(req);
+
       const { public_id } = req.data || {};
       if (!public_id) throw new HttpsError("invalid-argument", "public_id required");
 
