@@ -14,6 +14,7 @@ import AdminLayout from "../layouts/AdminLayout";
 import { deleteField } from "firebase/firestore";
 
 import { getUploadCallable, getDeleteCallable } from "../lib/functions";
+import { invalidateCache } from "../lib/cache";
 
 type VariantAttribute = {
   key: string;
@@ -567,6 +568,11 @@ export default function ProductEditPage() {
         },
         { merge: true }
       );
+
+      // Invalidate the admin list caches so the new/edited product shows up
+      // immediately instead of after the 2-minute TTL.
+      invalidateCache("products:list");
+      invalidateCache("dashboard:counts");
 
       navigate("/products");
     } catch (err: any) {

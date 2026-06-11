@@ -6,15 +6,30 @@ import { configureCloudinary, uploadBufferToCloudinary } from "../lib/cloudinary
  * Validate payload and upload base64 to Cloudinary.
  * Throws HttpsError on validation or other issues.
  */
+// Folders a caller may upload into. Anything else falls back to "products".
+const ALLOWED_FOLDERS = ["products", "collections", "hero"] as const;
+type Folder = (typeof ALLOWED_FOLDERS)[number];
+
+function resolveFolder(value: unknown): Folder {
+  return (ALLOWED_FOLDERS as readonly string[]).includes(String(value))
+    ? (value as Folder)
+    : "products";
+}
+
 export async function handleUploadBase64(payload: {
   filename?: string;
   base64?: string;
   mimeType?: string;
+  folder?: string;
 }) {
   const { filename, base64 } = payload || {};
   if (!filename || !base64) {
     throw new HttpsError("invalid-argument", "filename and base64 are required.");
   }
+  // Honour the caller's folder (was hardcoded to "products", so collection
+  // and hero images all landed in products/). Allowlisted to avoid arbitrary
+  // Cloudinary paths.
+  const folder = resolveFolder(payload?.folder);
 
   // Accept dataURL or raw base64
   let rawBase64 = String(base64);
@@ -29,7 +44,7 @@ export async function handleUploadBase64(payload: {
   }
 
   configureCloudinary();
-  const result = await uploadBufferToCloudinary(buffer, "products");
+  const result = await uploadBufferToCloudinary(buffer, folder);
 
   return {
     url: result.secure_url,
