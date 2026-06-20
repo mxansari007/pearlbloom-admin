@@ -207,7 +207,7 @@ export default function ChatDetailPage() {
                   {initials || "?"}
                 </div>
                 <div>
-                  <p className="font-semibold text-white">{user.name}</p>
+                  <p className="font-semibold text-neutral-100">{user.name}</p>
                   <p className="text-sm text-neutral-400">{user.phone}</p>
                 </div>
               </div>

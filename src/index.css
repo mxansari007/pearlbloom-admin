@@ -1,5 +1,69 @@
 @import "tailwindcss";
 
+/* Hide scrollbar utility (horizontal tab/filter strips) */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ===================================================================
+   Blog rich-text editor + preview (TipTap) — Journal authoring
+   =================================================================== */
+.tiptap-content:focus { outline: none; }
+.prose-blog { color: #1f2937; line-height: 1.7; font-size: 1rem; }
+.prose-blog h2 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.6rem; color: #111827; }
+.prose-blog h3 { font-size: 1.2rem; font-weight: 600; margin: 1.2rem 0 0.4rem; color: #111827; }
+.prose-blog p { margin: 0 0 0.9rem; }
+.prose-blog a { color: #b45309; text-decoration: underline; text-underline-offset: 2px; }
+.prose-blog ul { list-style: disc; padding-left: 1.4rem; margin: 0 0 0.9rem; }
+.prose-blog ol { list-style: decimal; padding-left: 1.4rem; margin: 0 0 0.9rem; }
+.prose-blog li { margin: 0.2rem 0; }
+.prose-blog blockquote { border-left: 3px solid #d4a017; padding-left: 1rem; margin: 1rem 0; color: #4b5563; font-style: italic; }
+.prose-blog img, .prose-blog .blog-img { max-width: 100%; height: auto; border-radius: 12px; margin: 1rem 0; }
+.prose-blog strong { font-weight: 700; }
+
+/* TipTap placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
+
+/* ===================================================================
+   LIGHT ADMIN THEME
+   The admin was authored "dark-first": the neutral scale's low numbers
+   were light text and high numbers were dark surfaces. Inverting the
+   neutral palette flips every neutral-* utility to a clean light theme
+   in one place. (White-on-colored buttons keep text-white; primary
+   text-white in components was converted to text-neutral-100.)
+   =================================================================== */
+@theme {
+  --color-neutral-50: #0a0a0a;
+  --color-neutral-100: #171717;
+  --color-neutral-200: #262626;
+  --color-neutral-300: #404040;
+  --color-neutral-400: #525252;
+  --color-neutral-500: #737373;
+  --color-neutral-600: #a3a3a3;
+  --color-neutral-700: #d4d4d4;
+  --color-neutral-800: #e5e5e5;
+  --color-neutral-900: #f5f5f5;
+  --color-neutral-950: #fafafa;
+}
+
+/* Light-accent text: these shades were light-on-dark — darken for a light
+   background (covers hover variants too). */
+.text-yellow-100, .text-yellow-200, .text-yellow-300, .text-yellow-400,
+.hover\:text-yellow-100:hover, .hover\:text-yellow-200:hover,
+.hover\:text-yellow-300:hover, .hover\:text-yellow-400:hover {
+  color: #a16207 !important;
+}
+.text-red-200, .text-red-300, .text-red-400,
+.hover\:text-red-200:hover, .hover\:text-red-300:hover, .hover\:text-red-400:hover {
+  color: #b91c1c !important;
+}
+.text-emerald-300, .text-emerald-400 { color: #047857 !important; }
+
 /* Global defaults that play nicely with Tailwind + full-page app */
 
 :root {
@@ -19,8 +83,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #020617; /* tailwind's slate-950-ish */
-  color: #e5e7eb; /* tailwind's gray-200-ish */
+  background-color: #f4f5f7; /* soft light grey — easy on the eyes */
+  color: #1f2430; /* dark slate text */
 }
 
 /* Let Tailwind handle most link & button styles.
@@ -34,4 +98,61 @@ a {
 h1,
 button {
   font: inherit;
+}
+
+/* ===================================================================
+   COLOURFUL MODE  (data-theme="colour")
+   A warm, premium DARK theme that is NOT plain black — deep plum /
+   aubergine surfaces with the brand's gold + soft-red accents.
+   Light mode is the default and is left completely untouched.
+
+   Like the light theme above, this re-maps the single neutral scale the
+   whole app already uses, so every neutral-* utility re-themes from one
+   place. Here low indices are light (text) and high indices are deep
+   plum (surfaces) — i.e. a tinted dark theme.
+   =================================================================== */
+:root[data-theme="colour"] {
+  --color-neutral-50: #f8f4fa;  /* lightest / strongest text */
+  --color-neutral-100: #efe7f3; /* primary text */
+  --color-neutral-200: #ddd0e4; /* strong secondary text */
+  --color-neutral-300: #c4b1cf; /* secondary text */
+  --color-neutral-400: #a98fb6; /* muted text */
+  --color-neutral-500: #8a6c99; /* mid */
+  --color-neutral-600: #6c4f7e; /* mid-dark */
+  --color-neutral-700: #4e3960; /* borders / dividers */
+  --color-neutral-800: #392749; /* card surfaces */
+  --color-neutral-900: #291b39; /* panels / gradient end */
+  --color-neutral-950: #1d1229; /* page background — deep plum, not black */
+}
+
+/* The light theme darkened gold/red/emerald text for white backgrounds.
+   On the dark plum we flip them back to light, readable shades. Higher
+   specificity + !important so these win over the light-mode rules above. */
+:root[data-theme="colour"] .text-yellow-100,
+:root[data-theme="colour"] .text-yellow-200,
+:root[data-theme="colour"] .text-yellow-300,
+:root[data-theme="colour"] .text-yellow-400,
+:root[data-theme="colour"] .hover\:text-yellow-100:hover,
+:root[data-theme="colour"] .hover\:text-yellow-200:hover,
+:root[data-theme="colour"] .hover\:text-yellow-300:hover,
+:root[data-theme="colour"] .hover\:text-yellow-400:hover {
+  color: #fcd34d !important; /* warm light gold */
+}
+:root[data-theme="colour"] .text-red-200,
+:root[data-theme="colour"] .text-red-300,
+:root[data-theme="colour"] .text-red-400,
+:root[data-theme="colour"] .hover\:text-red-200:hover,
+:root[data-theme="colour"] .hover\:text-red-300:hover,
+:root[data-theme="colour"] .hover\:text-red-400:hover {
+  color: #fca5a5 !important; /* soft light red */
+}
+:root[data-theme="colour"] .text-emerald-300,
+:root[data-theme="colour"] .text-emerald-400 {
+  color: #6ee7b7 !important; /* light emerald */
+}
+
+/* Body fallback so any uncovered gap matches the plum (not the light grey). */
+:root[data-theme="colour"] body {
+  background-color: #1d1229;
+  color: #efe7f3;
 }

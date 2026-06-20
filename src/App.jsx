@@ -21,6 +21,10 @@ import ReviewsPage from "./pages/ReviewsPage";
 import ShipmentsPage from "./pages/ShipmentsPage";
 import CouponsPage from "./pages/CouponsPage";
 import CouponEditPage from "./pages/CouponEditPage";
+import JournalPage from "./pages/JournalPage";
+import JournalEditPage from "./pages/JournalEditPage";
+import PageSeoPage from "./pages/PageSeoPage";
+import PageSeoEditPage from "./pages/PageSeoEditPage";
 
 export default function App() {
   return (
@@ -163,6 +167,46 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ReviewsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/journal"
+          element={
+            <ProtectedRoute>
+              <JournalPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/journal/new"
+          element={
+            <ProtectedRoute>
+              <JournalEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/journal/:slug"
+          element={
+            <ProtectedRoute>
+              <JournalEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/page-seo"
+          element={
+            <ProtectedRoute>
+              <PageSeoPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/page-seo/:key"
+          element={
+            <ProtectedRoute>
+              <PageSeoEditPage />
             </ProtectedRoute>
           }
         />

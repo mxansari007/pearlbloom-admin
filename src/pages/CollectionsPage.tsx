@@ -503,7 +503,7 @@ export default function CollectionsPage() {
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-medium text-white truncate">{c.name}</h3>
+                  <h3 className="font-medium text-neutral-100 truncate">{c.name}</h3>
                   {c.isFeatured && <span className="text-[10px] bg-yellow-500/15 text-yellow-400 px-2 py-0.5 rounded-full">Featured</span>}
                 </div>
                 <p className="text-xs text-neutral-500 mt-0.5">/{c.slug} · Priority: {c.priority}</p>
@@ -549,7 +549,7 @@ export default function CollectionsPage() {
                     )}
                   </td>
                   <td className="px-4 sm:px-6 py-4">
-                    <div className="font-medium text-white group-hover:text-yellow-200 transition">{c.name}</div>
+                    <div className="font-medium text-neutral-100 group-hover:text-yellow-200 transition">{c.name}</div>
                     {c.isFeatured && <span className="text-[10px] bg-yellow-500/15 text-yellow-400 px-2 py-0.5 rounded-full mt-1 inline-block">Featured</span>}
                   </td>
                   <td className="px-4 sm:px-6 py-4 text-neutral-500 hidden md:table-cell">

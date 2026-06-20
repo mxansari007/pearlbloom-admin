@@ -487,7 +487,7 @@ function StatCard({
           </span>
           <span className="text-base sm:text-lg opacity-60">{icon}</span>
         </div>
-        <div className={`text-xl sm:text-2xl lg:text-3xl font-bold mt-2 ${highlight ? "text-yellow-100" : "text-white"}`}>
+        <div className={`text-xl sm:text-2xl lg:text-3xl font-bold mt-2 ${highlight ? "text-yellow-100" : "text-neutral-100"}`}>
           {formatNumber(value)}
         </div>
         <div className="text-[10px] sm:text-[11px] text-neutral-500 mt-1.5 truncate" title={subtitle}>

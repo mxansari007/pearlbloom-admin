@@ -1,5 +1,5 @@
 // src/pages/ProductsPage.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   db,
@@ -21,80 +21,58 @@ type Product = {
   currency: string;
   collectionId?: string;
   isFeatured?: boolean;
+  thumbnailUrl?: string;
+  categories: string[];
+  stock: number | null; // null = not tracked
+  sold: number;
 };
 
-const ProductRowSkeleton = () => (
-  <tr className="animate-pulse">
-    <td className="px-4 sm:px-6 py-4">
-      <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
-      <div className="h-3 bg-neutral-700 rounded w-1/2 mt-2"></div>
-    </td>
-    <td className="px-4 sm:px-6 py-4 hidden sm:table-cell">
-      <div className="h-4 bg-neutral-700 rounded w-1/2"></div>
-    </td>
-    <td className="px-4 sm:px-6 py-4 hidden md:table-cell">
-      <div className="h-4 bg-neutral-700 rounded w-1/4"></div>
-    </td>
-    <td className="px-4 sm:px-6 py-4 text-right">
-      <div className="flex justify-end gap-2">
-        <div className="h-7 w-14 bg-neutral-700 rounded-full"></div>
-        <div className="h-7 w-16 bg-neutral-700 rounded-full hidden sm:block"></div>
-      </div>
-    </td>
-  </tr>
-);
+function computeStock(data: any): number | null {
+  const variants = Array.isArray(data.variants) ? data.variants : [];
+  if (variants.length) {
+    return variants.reduce(
+      (sum: number, v: any) => sum + (typeof v.stock === "number" ? v.stock : 0),
+      0
+    );
+  }
+  if (data.inventory?.trackStock) {
+    return typeof data.inventory.stock === "number" ? data.inventory.stock : 0;
+  }
+  return null;
+}
 
-// Mobile product card for small screens
-const ProductCard = ({ product, onDelete }: { product: Product; onDelete: (id: string) => void }) => (
-  <div className="p-4 border-b border-neutral-800/60 last:border-b-0">
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <Link to={`/products/${product.id}`} className="font-medium text-white hover:text-yellow-200 transition text-sm">
-          {product.name || "Untitled product"}
-        </Link>
-        <div className="flex items-center gap-2 mt-1.5">
-          <span className="text-xs text-neutral-300">
-            {product.currency} {product.price.toLocaleString("en-IN")}
-          </span>
-          {product.collectionId && (
-            <span className="text-[10px] text-neutral-500 bg-neutral-800 px-2 py-0.5 rounded">
-              {product.collectionId}
-            </span>
-          )}
-        </div>
-        {product.isFeatured && (
-          <span className="mt-2 inline-block rounded-full bg-yellow-500/15 text-yellow-400 text-[10px] px-2 py-0.5">
-            ⭐ Featured
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <Link
-          to={`/products/${product.id}`}
-          className="rounded-full bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 text-[11px] transition"
-        >
-          Edit
-        </Link>
-        <button
-          onClick={() => onDelete(product.id)}
-          className="rounded-full bg-red-600/20 hover:bg-red-600/40 text-red-400 px-3 py-1.5 text-[11px] transition"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
+const CardSkeleton = () => (
+  <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-3 animate-pulse">
+    <div className="aspect-square rounded-xl bg-neutral-800 mb-3" />
+    <div className="h-3.5 bg-neutral-800 rounded w-3/4 mb-2" />
+    <div className="h-3 bg-neutral-800 rounded w-1/3 mb-3" />
+    <div className="h-3 bg-neutral-800 rounded w-1/2" />
   </div>
 );
+
+const SearchIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.3-4.3" />
+  </svg>
+);
+
+function tabLabel(tab: string) {
+  if (tab === "all") return "All Products";
+  if (tab === "featured") return "Featured";
+  return tab;
+}
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        // Use cached products list to reduce reads
         const items = await getCached<Product[]>(
           "products:list",
           async () => {
@@ -108,6 +86,18 @@ export default function ProductsPage() {
                 currency: data.currency ?? "INR",
                 collectionId: data.collectionId ?? "",
                 isFeatured: !!data.isFeatured,
+                thumbnailUrl:
+                  data.thumbnailUrl ||
+                  (Array.isArray(data.images) ? data.images[0] : "") ||
+                  "",
+                categories: Array.isArray(data.categories) ? data.categories : [],
+                stock: computeStock(data),
+                sold:
+                  typeof data.soldCount === "number"
+                    ? data.soldCount
+                    : typeof data.sold === "number"
+                      ? data.sold
+                      : 0,
               };
             });
           },
@@ -124,10 +114,26 @@ export default function ProductsPage() {
     if (!confirm("Delete this product?")) return;
     await deleteDoc(doc(db, "products", id));
     setProducts((prev) => prev.filter((p) => p.id !== id));
-    // Invalidate cache so next load gets fresh data
     invalidateCache("products:list");
     invalidateCache("dashboard:counts");
   };
+
+  const tabs = useMemo(() => {
+    const cats = Array.from(new Set(products.flatMap((p) => p.categories)))
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    return ["all", "featured", ...cats];
+  }, [products]);
+
+  const filtered = useMemo(() => {
+    let items = products;
+    if (activeTab === "featured") items = items.filter((p) => p.isFeatured);
+    else if (activeTab !== "all") items = items.filter((p) => p.categories.includes(activeTab));
+    const q = query.trim().toLowerCase();
+    if (q) items = items.filter((p) => p.name.toLowerCase().includes(q));
+    return items;
+  }, [products, activeTab, query]);
 
   return (
     <AdminLayout
@@ -138,129 +144,123 @@ export default function ProductsPage() {
           to="/products/new"
           className="rounded-full bg-yellow-500 text-black px-4 py-1.5 text-xs font-medium hover:bg-yellow-400 transition"
         >
-          + Add product
+          + Add New Product
         </Link>
       }
     >
-      {/* Mobile Card View */}
-      <div className="sm:hidden">
-        <div className="bg-neutral-950/60 border border-neutral-800 rounded-2xl overflow-hidden">
-          {loading && (
-            <div className="p-4 space-y-4 animate-pulse">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex justify-between items-center">
-                  <div className="space-y-2 flex-1">
-                    <div className="h-4 bg-neutral-700 rounded w-3/4"></div>
-                    <div className="h-3 bg-neutral-700 rounded w-1/2"></div>
-                  </div>
-                  <div className="h-7 w-14 bg-neutral-700 rounded-full"></div>
+      {/* Toolbar: search */}
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative w-full sm:max-w-xs text-neutral-400 focus-within:text-yellow-300">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+            <SearchIcon />
+          </span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search product…"
+            className="w-full rounded-full bg-neutral-900/60 border border-neutral-800 pl-9 pr-4 py-2 text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-yellow-500/50 transition"
+          />
+        </div>
+        <span className="text-xs text-neutral-500 shrink-0">
+          {loading ? "Loading…" : `${filtered.length} item${filtered.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+
+      {/* Category tabs */}
+      <div className="mb-6 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        {tabs.map((tab) => {
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition border ${
+                active
+                  ? "bg-yellow-500 text-black border-yellow-500"
+                  : "bg-neutral-900/60 text-neutral-300 border-neutral-800 hover:border-neutral-600"
+              }`}
+            >
+              {tabLabel(tab)}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+          {Array.from({ length: 10 }).map((_, i) => <CardSkeleton key={i} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-12 text-center">
+          <div className="text-4xl mb-3 opacity-40">📦</div>
+          <p className="text-sm text-neutral-400 mb-2">
+            {products.length === 0 ? "No products yet" : "No products match your search"}
+          </p>
+          <Link to="/products/new" className="text-xs text-yellow-400 hover:underline">
+            Add your first product →
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+          {filtered.map((p) => (
+            <div
+              key={p.id}
+              className="group relative rounded-2xl border border-neutral-800 bg-neutral-950/60 p-3 hover:border-yellow-500/40 hover:bg-neutral-900/60 transition"
+            >
+              <Link to={`/products/${p.id}`} className="block">
+                <div className="aspect-square rounded-xl bg-neutral-900 overflow-hidden mb-3 flex items-center justify-center">
+                  {p.thumbnailUrl ? (
+                    <img src={p.thumbnailUrl} alt={p.name} className="h-full w-full object-cover" loading="lazy" />
+                  ) : (
+                    <span className="text-3xl opacity-25">💎</span>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-          {!loading && products.map((p) => (
-            <ProductCard key={p.id} product={p} onDelete={handleDelete} />
-          ))}
-          {!loading && products.length === 0 && (
-            <div className="p-8 text-center">
-              <div className="text-4xl mb-3 opacity-40">📦</div>
-              <p className="text-sm text-neutral-400 mb-2">No products yet</p>
-              <Link
-                to="/products/new"
-                className="text-xs text-yellow-400 hover:underline"
-              >
-                Add your first product →
+                <p className="font-medium text-sm text-neutral-100 truncate" title={p.name}>
+                  {p.name || "Untitled product"}
+                </p>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  {p.currency} {p.price.toLocaleString("en-IN")}
+                </p>
+                <div className="flex items-center gap-3 mt-2 text-[11px] text-neutral-500">
+                  <span>
+                    Stock <strong className="text-neutral-300">{p.stock ?? "—"}</strong>
+                  </span>
+                  <span>
+                    Sold <strong className="text-neutral-300">{p.sold}</strong>
+                  </span>
+                </div>
               </Link>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Desktop Table View */}
-      <div className="hidden sm:block bg-neutral-950/60 border border-neutral-800 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-900/60">
-              <tr className="text-neutral-400">
-                <th className="px-4 sm:px-6 py-4 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Product</th>
-                <th className="px-4 sm:px-6 py-4 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider">Price</th>
-                <th className="px-4 sm:px-6 py-4 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden md:table-cell">Collection</th>
-                <th className="px-4 sm:px-6 py-4 text-right text-[11px] sm:text-xs font-medium uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-neutral-800/60">
-              {loading && Array.from({ length: 5 }).map((_, i) => <ProductRowSkeleton key={i} />)}
-              {!loading && products.map((p) => (
-                <tr
-                  key={p.id}
-                  className="hover:bg-neutral-900/50 transition group"
-                >
-                  <td className="px-4 sm:px-6 py-4">
-                    <div className="flex flex-col">
-                      <Link to={`/products/${p.id}`} className="font-medium text-white group-hover:text-yellow-200 transition">
-                        {p.name || "Untitled product"}
-                      </Link>
-                      {p.isFeatured && (
-                        <span className="mt-1.5 inline-block w-fit rounded-full bg-yellow-500/15 text-yellow-400 text-[10px] px-2 py-0.5">
-                          ⭐ Featured
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="px-4 sm:px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-300">
-                      {p.currency} {p.price.toLocaleString("en-IN")}
-                    </span>
-                  </td>
-
-                  <td className="px-4 sm:px-6 py-4 text-neutral-400 text-sm hidden md:table-cell">
-                    {p.collectionId ? (
-                      <span className="bg-neutral-800/60 px-2 py-1 rounded text-xs">{p.collectionId}</span>
-                    ) : (
-                      <span className="text-neutral-600">—</span>
-                    )}
-                  </td>
-
-                  <td className="px-4 sm:px-6 py-4 text-right">
-                    <div className="inline-flex items-center gap-2">
-                      <Link
-                        to={`/products/${p.id}`}
-                        className="rounded-full bg-neutral-800 hover:bg-neutral-700 px-3 py-1.5 text-[11px] font-medium transition"
-                      >
-                        Edit
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(p.id)}
-                        className="rounded-full bg-red-600/20 hover:bg-red-600/40 text-red-400 px-3 py-1.5 text-[11px] font-medium transition"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {!loading && products.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center">
-                    <div className="text-4xl mb-3 opacity-40">📦</div>
-                    <p className="text-sm text-neutral-400 mb-2">No products yet</p>
-                    <Link
-                      to="/products/new"
-                      className="text-xs text-yellow-400 hover:underline"
-                    >
-                      Add your first product →
-                    </Link>
-                  </td>
-                </tr>
+              {p.isFeatured && (
+                <span className="absolute top-2 left-2 rounded-full bg-yellow-500/90 text-black text-[10px] font-semibold px-2 py-0.5">
+                  ★
+                </span>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
+              {/* Hover actions */}
+              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                <Link
+                  to={`/products/${p.id}`}
+                  title="Edit"
+                  className="h-7 w-7 rounded-full bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 text-xs flex items-center justify-center"
+                >
+                  ✎
+                </Link>
+                <button
+                  type="button"
+                  title="Delete"
+                  onClick={() => handleDelete(p.id)}
+                  className="h-7 w-7 rounded-full bg-red-600/80 hover:bg-red-600 text-white text-xs flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </AdminLayout>
   );
 }

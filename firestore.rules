@@ -47,6 +47,17 @@ service cloud.firestore {
     match /collections/{id}  { allow read: if true;  allow write: if isAdmin(); }
     match /siteSettings/{id} { allow read: if true;  allow write: if isAdmin(); }
 
+    // ── Blog / Journal: published posts world-readable; drafts + writes are
+    //    admin-only. (Storefront server also reads via Admin SDK, which bypasses
+    //    these rules; the public client never queries drafts.) ───────────────
+    match /blogPosts/{id} {
+      allow read: if (resource.data.status == 'published') || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ── Collection (facet) page SEO overrides: world-readable, admin-only writes.
+    match /collectionSeo/{id} { allow read: if true; allow write: if isAdmin(); }
+
     // ── Coupons: only the admin app touches these from the client; the
     //    storefront validates them server-side (Admin SDK, bypasses rules). ──
     match /coupons/{id} {

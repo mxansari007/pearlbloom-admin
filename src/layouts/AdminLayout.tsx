@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { auth, signOut, db } from "../firebase";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
+import ThemeToggle from "../components/ThemeToggle";
 
 type AdminLayoutProps = {
   title?: string;
@@ -22,6 +23,8 @@ const navItems = [
   { to: "/shipments", label: "Shipments", icon: "🚚" },
   { to: "/users", label: "Users", icon: "👥" },
   { to: "/reviews", label: "Reviews", icon: "⭐" },
+  { to: "/journal", label: "Journal", icon: "✍️" },
+  { to: "/page-seo", label: "Page SEO", icon: "🔍" },
   { to: "/chats", label: "Chats", icon: "💬", notify: true },
   { to: "/settings", label: "Settings", icon: "⚙️" },
 ];
@@ -72,7 +75,7 @@ export default function AdminLayout({
   };
 
   return (
-    <div className="h-screen bg-neutral-950 text-white flex overflow-hidden">
+    <div className="h-screen bg-neutral-950 text-neutral-100 flex overflow-hidden">
       <aside className="hidden md:flex w-64 flex-col border-r border-neutral-800/60 bg-neutral-950/80">
         <div className="px-5 py-5 border-b border-neutral-800/60">
           <Link to="/" className="flex items-center gap-3 group">
@@ -110,7 +113,8 @@ export default function AdminLayout({
           ))}
         </nav>
 
-        <div className="p-4 border-t border-neutral-800/60">
+        <div className="p-4 border-t border-neutral-800/60 space-y-2">
+          <ThemeToggle />
           <button
             onClick={handleLogout}
             className="w-full text-[12px] rounded-xl border border-neutral-700/60 px-3 py-2.5 text-neutral-400 hover:border-red-500/50 hover:text-red-300 hover:bg-red-950/30 transition flex items-center justify-center gap-2"
@@ -158,12 +162,15 @@ export default function AdminLayout({
               </div>
             </Link>
 
-            <button
-              onClick={handleLogout}
-              className="text-[11px] rounded-full border border-neutral-700 px-2.5 py-1 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
-            >
-              Log out
-            </button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle compact />
+              <button
+                onClick={handleLogout}
+                className="text-[11px] rounded-full border border-neutral-700 px-2.5 py-1 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"
+              >
+                Log out
+              </button>
+            </div>
           </div>
         </header>
 
@@ -217,7 +224,8 @@ export default function AdminLayout({
                 ))}
               </nav>
 
-              <div className="p-4 border-t border-neutral-800/80">
+              <div className="p-4 border-t border-neutral-800/80 space-y-2">
+                <ThemeToggle />
                 <button
                   onClick={handleLogout}
                   className="w-full text-[12px] rounded-lg border border-neutral-700 px-3 py-2 text-neutral-200 hover:border-red-500/70 hover:text-red-300 hover:bg-red-900/20 transition"

@@ -47,6 +47,29 @@ type Marketplaces = {
   meesho: string;
 };
 
+// ---- Product-page highlights (mirror the storefront PDP) -------------------
+// `icon` is a key from ICON_OPTIONS below; the storefront maps the same keys to
+// line icons (pearlbloom/components/product/featureIcons.tsx).
+type FeatureBadge = {
+  icon: string;
+  title: string;
+  subtitle: string;
+  highlight: boolean;
+};
+
+type AssuranceCard = {
+  icon: string;
+  eyebrow: string;
+  title: string;
+};
+
+type DispatchTimer = {
+  enabled: boolean;
+  cutoffHour: number;
+  cutoffMinute: number;
+  label: string;
+};
+
 type ProductForm = {
   name: string;
   slug: string;
@@ -56,13 +79,22 @@ type ProductForm = {
   currency: string;
   shortDescription: string;
   description: string;
+  metaTitle: string;
+  metaDescription: string;
+  noindex: boolean;
   attributes: Attribute[];
   categories: string[];
+  style: string[];
+  finish: string[];
+  occasion: string[];
   collectionId: string;
   isFeatured: boolean;
   thumbnailUrl: string;
   images: string[];
   marketplaces: Marketplaces;
+  featureBadges: FeatureBadge[];
+  assuranceCards: AssuranceCard[];
+  dispatchTimer: DispatchTimer;
   inventory?: Inventory;
   variants?: Variant[];
 };
@@ -71,6 +103,53 @@ type CollectionOption = {
   id: string;
   name: string;
 };
+
+/* Icon choices for feature badges & assurance cards. The `key` MUST match the
+   storefront registry (pearlbloom/components/product/featureIcons.tsx). The
+   emoji is only a friendly preview here — the storefront renders a matching
+   line icon. */
+const ICON_OPTIONS: { key: string; label: string; emoji: string }[] = [
+  { key: "shield-half", label: "Shield — anti-tarnish", emoji: "🛡️" },
+  { key: "shield-check", label: "Shield check — durable / warranty", emoji: "✅" },
+  { key: "droplet", label: "Droplet — water-resistant", emoji: "💧" },
+  { key: "sparkles", label: "Sparkles — premium / hypoallergenic", emoji: "✨" },
+  { key: "feather", label: "Feather — lightweight", emoji: "🪶" },
+  { key: "gem", label: "Gem — crafted", emoji: "💎" },
+  { key: "leaf", label: "Leaf — skin-safe", emoji: "🍃" },
+  { key: "heart", label: "Heart — loved", emoji: "❤️" },
+  { key: "award", label: "Award — quality assured", emoji: "🏅" },
+  { key: "star", label: "Star — bestseller", emoji: "⭐" },
+  { key: "crown", label: "Crown — luxury", emoji: "👑" },
+  { key: "truck", label: "Truck — fast shipping", emoji: "🚚" },
+  { key: "package-check", label: "Package — secure packaging", emoji: "📦" },
+  { key: "clock", label: "Clock — quick dispatch", emoji: "⏰" },
+  { key: "sun", label: "Sun — everyday wear", emoji: "☀️" },
+  { key: "recycle", label: "Recycle — easy returns", emoji: "♻️" },
+];
+
+/* Honest defaults — prefilled on new products so the PDP looks exactly like the
+   current design, then fully editable. Mirrors the storefront fallback. */
+const DEFAULT_FEATURE_BADGES: FeatureBadge[] = [
+  { icon: "shield-half", title: "Anti-Tarnish", subtitle: "Protective sealed finish", highlight: false },
+  { icon: "droplet", title: "Water-Resistant", subtitle: "Sweat & splash friendly", highlight: false },
+  { icon: "sparkles", title: "Hypoallergenic", subtitle: "Lead & nickel free", highlight: true },
+  { icon: "feather", title: "Lightweight", subtitle: "Comfortable all-day wear", highlight: false },
+];
+
+const DEFAULT_ASSURANCE_CARDS: AssuranceCard[] = [
+  { icon: "sparkles", eyebrow: "Crafted Finish", title: "18K Gold-Tone Plating" },
+  { icon: "shield-check", eyebrow: "Everyday Durable", title: "Anti-Tarnish Coating" },
+];
+
+const DEFAULT_DISPATCH_TIMER: DispatchTimer = {
+  enabled: true,
+  cutoffHour: 17,
+  cutoffMinute: 0,
+  label: "for same-day dispatch",
+};
+
+const cloneBadges = (b: FeatureBadge[]) => b.map((x) => ({ ...x }));
+const cloneCards = (c: AssuranceCard[]) => c.map((x) => ({ ...x }));
 
 const emptyForm: ProductForm = {
   name: "",
@@ -81,8 +160,14 @@ const emptyForm: ProductForm = {
   currency: "INR",
   shortDescription: "",
   description: "",
+  metaTitle: "",
+  metaDescription: "",
+  noindex: false,
   attributes: [],
   categories: [],
+  style: [],
+  finish: [],
+  occasion: [],
   collectionId: "",
   isFeatured: false,
   thumbnailUrl: "",
@@ -92,6 +177,9 @@ const emptyForm: ProductForm = {
     flipkart: "",
     meesho: "",
   },
+  featureBadges: cloneBadges(DEFAULT_FEATURE_BADGES),
+  assuranceCards: cloneCards(DEFAULT_ASSURANCE_CARDS),
+  dispatchTimer: { ...DEFAULT_DISPATCH_TIMER },
   inventory: {
     trackStock: false,
     stock: 0,
@@ -107,6 +195,65 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+
+/* Taxonomy facet tags — slugs MUST match the storefront's earringCategories.ts
+   so category pages and filters resolve exactly. */
+type FacetKey = "style" | "finish" | "occasion";
+const FACET_GROUPS: { key: FacetKey; title: string; items: { slug: string; label: string }[] }[] = [
+  {
+    key: "style",
+    title: "Style Facet Tags",
+    items: [
+      { slug: "stud", label: "Stud" },
+      { slug: "hoop", label: "Hoop" },
+      { slug: "drop", label: "Drop" },
+      { slug: "dangle", label: "Dangle" },
+      { slug: "statement", label: "Statement" },
+      { slug: "jhumka", label: "Jhumka" },
+      { slug: "chandbali", label: "Chandbali" },
+      { slug: "ear-cuffs", label: "Ear Cuffs" },
+      { slug: "mismatch", label: "Mismatch" },
+      { slug: "clip-on", label: "Clip-on" },
+      { slug: "long", label: "Long" },
+      { slug: "huggies", label: "Huggies" },
+      { slug: "bali", label: "Bali" },
+    ],
+  },
+  {
+    key: "finish",
+    title: "Finish Facet Tags",
+    items: [
+      { slug: "gold-plated", label: "Gold Plated" },
+      { slug: "gold-tone", label: "Gold Tone" },
+      { slug: "anti-tarnish", label: "Anti Tarnish" },
+      { slug: "waterproof", label: "Waterproof" },
+      { slug: "oxidised", label: "Oxidised" },
+      { slug: "silver-tone", label: "Silver Tone" },
+      { slug: "enamel", label: "Enamel" },
+      { slug: "pearl", label: "Pearl" },
+      { slug: "crystal", label: "Crystal" },
+      { slug: "cz", label: "CZ" },
+      { slug: "american-diamond", label: "American Diamond" },
+      { slug: "stone", label: "Stone" },
+      { slug: "kundan", label: "Kundan" },
+    ],
+  },
+  {
+    key: "occasion",
+    title: "Occasion Facet Tags",
+    items: [
+      { slug: "daily-wear", label: "Daily Wear" },
+      { slug: "office-wear", label: "Office Wear" },
+      { slug: "party-wear", label: "Party Wear" },
+      { slug: "festive-wear", label: "Festive Wear" },
+      { slug: "wedding-wear", label: "Wedding Wear" },
+      { slug: "bridal", label: "Bridal" },
+      { slug: "college-wear", label: "College Wear" },
+      { slug: "gift", label: "Gift" },
+      { slug: "set", label: "Earrings Set" },
+    ],
+  },
+];
 
 const ProductEditPageSkeleton = () => (
   <div className="space-y-5 max-w-3xl animate-pulse">
@@ -188,6 +335,9 @@ export default function ProductEditPage() {
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const [uploadingGalleryMap, setUploadingGalleryMap] = useState<Record<string, boolean>>({});
   const [imagesMeta, setImagesMeta] = useState<Record<string, string>>({});
+  // url -> alt text for every product image (SEO + accessibility)
+  const [imageAlt, setImageAlt] = useState<Record<string, string>>({});
+  const setAlt = (url: string, value: string) => setImageAlt((m) => ({ ...m, [url]: value }));
 
   // 🔑 NEW: Track which variant's image selector is open
   const [variantImageSelectorOpen, setVariantImageSelectorOpen] = useState<number | null>(null);
@@ -282,8 +432,14 @@ export default function ProductEditPage() {
             currency: data.currency ?? "INR",
             shortDescription: data.shortDescription ?? "",
             description: data.description ?? data.fullDescription ?? "",
+            metaTitle: data.metaTitle ?? "",
+            metaDescription: data.metaDescription ?? "",
+            noindex: data.noindex ?? false,
             attributes: attrs,
             categories: Array.isArray(data.categories) ? data.categories : [],
+            style: Array.isArray(data.style) ? data.style : [],
+            finish: Array.isArray(data.finish) ? data.finish : [],
+            occasion: Array.isArray(data.occasion) ? data.occasion : [],
             collectionId: data.collectionId ?? "",
             isFeatured: data.isFeatured ?? false,
             thumbnailUrl: data.thumbnailUrl ?? "",
@@ -293,12 +449,50 @@ export default function ProductEditPage() {
               flipkart: data.marketplaces?.flipkart ?? "",
               meesho: data.marketplaces?.meesho ?? "",
             },
+            featureBadges:
+              Array.isArray(data.featureBadges) && data.featureBadges.length > 0
+                ? data.featureBadges.map((b: any) => ({
+                    icon: typeof b?.icon === "string" ? b.icon : "sparkles",
+                    title: typeof b?.title === "string" ? b.title : "",
+                    subtitle: typeof b?.subtitle === "string" ? b.subtitle : "",
+                    highlight: Boolean(b?.highlight),
+                  }))
+                : cloneBadges(DEFAULT_FEATURE_BADGES),
+            assuranceCards:
+              Array.isArray(data.assuranceCards) && data.assuranceCards.length > 0
+                ? data.assuranceCards.map((c: any) => ({
+                    icon: typeof c?.icon === "string" ? c.icon : "sparkles",
+                    eyebrow: typeof c?.eyebrow === "string" ? c.eyebrow : "",
+                    title: typeof c?.title === "string" ? c.title : "",
+                  }))
+                : cloneCards(DEFAULT_ASSURANCE_CARDS),
+            dispatchTimer:
+              data.dispatchTimer && typeof data.dispatchTimer === "object"
+                ? {
+                    enabled: data.dispatchTimer.enabled !== false,
+                    cutoffHour:
+                      typeof data.dispatchTimer.cutoffHour === "number"
+                        ? data.dispatchTimer.cutoffHour
+                        : 17,
+                    cutoffMinute:
+                      typeof data.dispatchTimer.cutoffMinute === "number"
+                        ? data.dispatchTimer.cutoffMinute
+                        : 0,
+                    label:
+                      typeof data.dispatchTimer.label === "string"
+                        ? data.dispatchTimer.label
+                        : "for same-day dispatch",
+                  }
+                : { ...DEFAULT_DISPATCH_TIMER },
             inventory,
             variants,
           });
 
           if (data.imagesMeta && typeof data.imagesMeta === "object") {
             setImagesMeta(data.imagesMeta);
+          }
+          if (data.imageAlt && typeof data.imageAlt === "object") {
+            setImageAlt(data.imageAlt);
           }
         } catch (err: any) {
           console.error(err);
@@ -314,6 +508,16 @@ export default function ProductEditPage() {
 
   const handleChange = (field: keyof ProductForm, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const toggleFacet = (group: FacetKey, slug: string) => {
+    setForm((prev) => {
+      const arr = prev[group];
+      return {
+        ...prev,
+        [group]: arr.includes(slug) ? arr.filter((s) => s !== slug) : [...arr, slug],
+      };
+    });
   };
 
   const updateMarketplace = (field: keyof Marketplaces, value: string) => {
@@ -480,6 +684,72 @@ export default function ProductEditPage() {
     });
   };
 
+  // ---- Feature badges (buy-box 2×2 grid) ----
+  const addFeatureBadge = () =>
+    setForm((prev) => ({
+      ...prev,
+      featureBadges: [
+        ...prev.featureBadges,
+        { icon: "sparkles", title: "", subtitle: "", highlight: false },
+      ],
+    }));
+
+  const updateFeatureBadge = (
+    index: number,
+    field: keyof FeatureBadge,
+    value: string | boolean
+  ) =>
+    setForm((prev) => {
+      const badges = [...prev.featureBadges];
+      badges[index] = { ...badges[index], [field]: value };
+      return { ...prev, featureBadges: badges };
+    });
+
+  const removeFeatureBadge = (index: number) =>
+    setForm((prev) => {
+      const badges = [...prev.featureBadges];
+      badges.splice(index, 1);
+      return { ...prev, featureBadges: badges };
+    });
+
+  // ---- Assurance cards (under the gallery) ----
+  const addAssuranceCard = () =>
+    setForm((prev) => ({
+      ...prev,
+      assuranceCards: [
+        ...prev.assuranceCards,
+        { icon: "sparkles", eyebrow: "", title: "" },
+      ],
+    }));
+
+  const updateAssuranceCard = (
+    index: number,
+    field: keyof AssuranceCard,
+    value: string
+  ) =>
+    setForm((prev) => {
+      const cards = [...prev.assuranceCards];
+      cards[index] = { ...cards[index], [field]: value };
+      return { ...prev, assuranceCards: cards };
+    });
+
+  const removeAssuranceCard = (index: number) =>
+    setForm((prev) => {
+      const cards = [...prev.assuranceCards];
+      cards.splice(index, 1);
+      return { ...prev, assuranceCards: cards };
+    });
+
+  // ---- Dispatch timer ----
+  const updateDispatchTimer = (
+    field: keyof DispatchTimer,
+    value: string | number | boolean
+  ) =>
+    setForm((prev) => ({
+      ...prev,
+      dispatchTimer: { ...prev.dispatchTimer, [field]: value },
+    }));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -549,17 +819,45 @@ export default function ProductEditPage() {
           currency: form.currency,
           shortDescription: form.shortDescription,
           description: form.description,
+          metaTitle: form.metaTitle,
+          metaDescription: form.metaDescription,
+          noindex: form.noindex,
           attributes: form.attributes,
           categories: form.categories,
+          style: form.style,
+          finish: form.finish,
+          occasion: form.occasion,
           collectionId: form.collectionId,
           isFeatured: form.isFeatured,
           thumbnailUrl: form.thumbnailUrl,
           images: form.images ?? [],
           imagesMeta: imagesMeta,
+          imageAlt: imageAlt,
           marketplaces: {
             amazon: form.marketplaces.amazon,
             flipkart: form.marketplaces.flipkart,
             meesho: form.marketplaces.meesho,
+          },
+          featureBadges: form.featureBadges
+            .filter((b) => b.title.trim() || b.subtitle.trim())
+            .map((b) => ({
+              icon: b.icon || "sparkles",
+              title: b.title.trim(),
+              subtitle: b.subtitle.trim(),
+              highlight: Boolean(b.highlight),
+            })),
+          assuranceCards: form.assuranceCards
+            .filter((c) => c.title.trim() || c.eyebrow.trim())
+            .map((c) => ({
+              icon: c.icon || "sparkles",
+              eyebrow: c.eyebrow.trim(),
+              title: c.title.trim(),
+            })),
+          dispatchTimer: {
+            enabled: Boolean(form.dispatchTimer.enabled),
+            cutoffHour: Math.min(23, Math.max(0, Number(form.dispatchTimer.cutoffHour) || 0)),
+            cutoffMinute: Math.min(59, Math.max(0, Number(form.dispatchTimer.cutoffMinute) || 0)),
+            label: form.dispatchTimer.label.trim() || "for same-day dispatch",
           },
           inventory: inventoryToSave,
           variants: variantsToSave,
@@ -697,7 +995,24 @@ export default function ProductEditPage() {
             {loading ? (
               <ProductEditPageSkeleton />
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 max-w-3xl">
+              <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6 max-w-5xl">
+                {/* Sticky action bar */}
+                <div className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-2xl border border-neutral-800 bg-neutral-950/85 backdrop-blur px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold">{isNew ? "Add New Product" : "Edit Product"}</p>
+                    <p className="text-[11px] text-neutral-400">Fill in the details, then save your changes.</p>
+                  </div>
+                  <button
+                    disabled={saving}
+                    className="rounded-xl bg-yellow-500 text-black px-6 py-2 text-sm font-semibold hover:bg-yellow-400 disabled:opacity-50 transition"
+                  >
+                    {saving ? "Saving…" : isNew ? "Publish Product" : "Save Changes"}
+                  </button>
+                </div>
+
+                {/* Product Details card */}
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4 sm:p-5 space-y-4 sm:space-y-5">
+                  <h3 className="text-sm font-semibold">Product Details</h3>
                 {/* Name & slug */}
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2">
                   <div>
@@ -817,7 +1132,55 @@ export default function ProductEditPage() {
                     placeholder="Rings, Engagement"
                   />
                 </div>
-      
+                </div>
+                {/* /Product Details card */}
+
+                {/* Taxonomy facet tags (Style / Finish / Occasion) */}
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-medium">Taxonomy Facet Tags</p>
+                    <p className="text-xs text-neutral-400">
+                      Tag this earring across Style, Finish and Occasion. Choose as many as apply — the
+                      storefront category pages and left-sidebar filters resolve these slugs exactly.
+                    </p>
+                  </div>
+
+                  {FACET_GROUPS.map((group) => (
+                    <div key={group.key}>
+                      <p className="text-[11px] uppercase tracking-wider text-neutral-300 mb-2">
+                        {group.title}{" "}
+                        <span className="text-yellow-400">({form[group.key].length} active)</span>
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
+                        {group.items.map((item) => {
+                          const active = form[group.key].includes(item.slug);
+                          return (
+                            <label
+                              key={item.slug}
+                              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs cursor-pointer transition ${
+                                active
+                                  ? "border-yellow-500/60 bg-yellow-500/10 text-yellow-200"
+                                  : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="accent-yellow-500"
+                                checked={active}
+                                onChange={() => toggleFacet(group.key, item.slug)}
+                              />
+                              {item.label}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Description card */}
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4 sm:p-5 space-y-4">
+                  <h3 className="text-sm font-semibold">Description</h3>
                 {/* Short + full description */}
                 <div>
                   <label className="text-sm">Short description</label>
@@ -840,7 +1203,64 @@ export default function ProductEditPage() {
                     placeholder="Longer storytelling copy for the product page."
                   />
                 </div>
-      
+                </div>
+                {/* /Description card */}
+
+                {/* SEO card */}
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4 sm:p-5 space-y-4">
+                  <h3 className="text-sm font-semibold">SEO optimisation</h3>
+
+                  <div>
+                    <label className="text-sm flex items-center justify-between">
+                      <span>Meta title</span>
+                      <span className={`text-xs ${(form.metaTitle || `${form.name} — Pearl Bloom`).length > 60 ? "text-red-400" : "text-neutral-500"}`}>
+                        {(form.metaTitle || `${form.name} — Pearl Bloom`).length}/60
+                      </span>
+                    </label>
+                    <input
+                      className="mt-1 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm"
+                      value={form.metaTitle}
+                      onChange={(e) => handleChange("metaTitle", e.target.value)}
+                      placeholder={`${form.name || "Product name"} — Pearl Bloom`}
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">Leave blank to use “{form.name || "Product name"} — Pearl Bloom”.</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm flex items-center justify-between">
+                      <span>Meta description</span>
+                      <span className={`text-xs ${form.metaDescription.length > 160 ? "text-red-400" : "text-neutral-500"}`}>
+                        {form.metaDescription.length}/160
+                      </span>
+                    </label>
+                    <textarea
+                      className="mt-1 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-sm"
+                      rows={3}
+                      value={form.metaDescription}
+                      onChange={(e) => handleChange("metaDescription", e.target.value)}
+                      placeholder="A compelling 150–160 character summary with the main keyword. Falls back to the short description."
+                    />
+                  </div>
+
+                  {/* Google snippet preview */}
+                  <div className="rounded-lg bg-white p-3">
+                    <p className="text-[#1a0dab] text-base leading-tight truncate">{form.metaTitle || `${form.name || "Product name"} — Pearl Bloom`}</p>
+                    <p className="text-[#006621] text-xs">pearlbloom.in › product › {form.slug || "your-product"}</p>
+                    <p className="text-[#545454] text-xs mt-0.5 line-clamp-2">
+                      {form.metaDescription || form.shortDescription || "Add a meta description to control how this product appears in Google search results."}
+                    </p>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={form.noindex} onChange={(e) => handleChange("noindex", e.target.checked)} />
+                    <span>Hide this product from search engines (noindex)</span>
+                  </label>
+                  <p className="text-xs text-neutral-500">
+                    URL slug is set in the Basics section above. Product, Offer &amp; Breadcrumb rich-result schema and the canonical tag are added automatically.
+                  </p>
+                </div>
+                {/* /SEO card */}
+
                 {/* Dynamic attributes */}
                 <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-4 space-y-4">
                   <div className="flex justify-between items-center">
@@ -883,12 +1303,26 @@ export default function ProductEditPage() {
                   </div>
                 </div>
       
+                {/* Product Images card */}
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4 sm:p-5 space-y-4">
+                  <h3 className="text-sm font-semibold">Product Images</h3>
+                  <div className="grid gap-5 md:grid-cols-2">
                 {/* Thumbnail */}
                 <div>
                   <label className="text-sm">Thumbnail image (card)</label>
                   <input className="mt-1 block text-sm" type="file" accept="image/*" onChange={handleThumbnailChange} />
                   {uploadingThumbnail && <p className="mt-2 text-xs text-neutral-400">Uploading thumbnail…</p>}
-                  {form.thumbnailUrl && <img src={form.thumbnailUrl} alt="Thumbnail" className="mt-2 h-32 rounded-lg object-cover" />}
+                  {form.thumbnailUrl && (
+                    <>
+                      <img src={form.thumbnailUrl} alt={imageAlt[form.thumbnailUrl] || "Thumbnail"} className="mt-2 h-32 rounded-lg object-cover" />
+                      <input
+                        className="mt-2 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-xs"
+                        placeholder="Alt text — describe this image"
+                        value={imageAlt[form.thumbnailUrl] || ""}
+                        onChange={(e) => setAlt(form.thumbnailUrl, e.target.value)}
+                      />
+                    </>
+                  )}
                   <p className="mt-1 text-xs text-neutral-500">Used in product cards / featured pieces.</p>
                 </div>
       
@@ -897,13 +1331,19 @@ export default function ProductEditPage() {
                   <label className="text-sm">Gallery images (for product detail page)</label>
                   <input className="mt-1 block text-sm" type="file" accept="image/*" multiple onChange={handleGalleryChange} />
                   {form.images.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-3">
+                    <div className="mt-3 grid grid-cols-2 gap-3">
                       {form.images.map((url) => (
-                        <div key={url} className="relative">
-                          <img src={url} alt="Product" className="h-24 w-24 rounded-lg object-cover border border-neutral-700" />
-                          <button type="button" onClick={() => removeGalleryImage(url)} className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-black/80 text-xs text-white flex items-center justify-center">
+                        <div key={url} className="relative rounded-lg border border-neutral-700 p-2">
+                          <button type="button" onClick={() => removeGalleryImage(url)} className="absolute -top-2 -right-2 z-10 h-6 w-6 rounded-full bg-black/80 text-xs text-white flex items-center justify-center">
                             ×
                           </button>
+                          <img src={url} alt={imageAlt[url] || "Product image"} className="h-24 w-full rounded-md object-cover" />
+                          <input
+                            className="mt-2 w-full rounded-md bg-neutral-900 border border-neutral-700 px-2 py-1.5 text-xs"
+                            placeholder="Alt text for this image"
+                            value={imageAlt[url] || ""}
+                            onChange={(e) => setAlt(url, e.target.value)}
+                          />
                         </div>
                       ))}
       
@@ -918,7 +1358,10 @@ export default function ProductEditPage() {
                     </div>
                   )}
                 </div>
-      
+                  </div>
+                </div>
+                {/* /Product Images card */}
+
                 {/* Marketplaces */}
                 <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-4 space-y-3">
                   <p className="text-sm font-medium">Marketplace links</p>
@@ -937,6 +1380,148 @@ export default function ProductEditPage() {
                       <input className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs" value={form.marketplaces.meesho} onChange={(e) => updateMarketplace("meesho", e.target.value)} placeholder="https://www.meesho.com/product/example/p/EXAMPLE" />
                     </div>
                   </div>
+                </div>
+
+                {/* ================= Product page highlights ================= */}
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-4 space-y-5">
+                  <div>
+                    <p className="text-sm font-medium">Product page highlights</p>
+                    <p className="text-xs text-neutral-400">
+                      The badge grid in the buy-box and the assurance cards under the photos. New products start with the standard set below — edit, add, or remove to suit this product.
+                    </p>
+                  </div>
+
+                  {/* Feature badges */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-300">Feature badges</p>
+                      <button type="button" onClick={addFeatureBadge} className="rounded-lg border border-neutral-700 px-2.5 py-1 text-xs text-neutral-200 hover:bg-neutral-800">+ Add badge</button>
+                    </div>
+                    {form.featureBadges.length === 0 && (
+                      <p className="text-xs text-neutral-500">No badges — the buy-box grid will be hidden for this product.</p>
+                    )}
+                    {form.featureBadges.map((badge, i) => (
+                      <div key={i} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="w-44 shrink-0 rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-2 text-xs"
+                            value={badge.icon}
+                            onChange={(e) => updateFeatureBadge(i, "icon", e.target.value)}
+                          >
+                            {ICON_OPTIONS.map((opt) => (
+                              <option key={opt.key} value={opt.key}>{opt.emoji} {opt.label}</option>
+                            ))}
+                          </select>
+                          <input
+                            className="flex-1 rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs"
+                            value={badge.title}
+                            onChange={(e) => updateFeatureBadge(i, "title", e.target.value)}
+                            placeholder="Title (e.g. Anti-Tarnish)"
+                          />
+                          <button type="button" onClick={() => removeFeatureBadge(i)} className="rounded-lg border border-neutral-700 px-2 py-2 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-red-300" aria-label="Remove badge">✕</button>
+                        </div>
+                        <input
+                          className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs"
+                          value={badge.subtitle}
+                          onChange={(e) => updateFeatureBadge(i, "subtitle", e.target.value)}
+                          placeholder="Subtitle (e.g. Protective sealed finish)"
+                        />
+                        <label className="flex items-center gap-2 text-xs text-neutral-300">
+                          <input type="checkbox" checked={badge.highlight} onChange={(e) => updateFeatureBadge(i, "highlight", e.target.checked)} />
+                          Highlight this badge (gold accent)
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Assurance cards */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-300">Assurance cards</p>
+                      <button type="button" onClick={addAssuranceCard} className="rounded-lg border border-neutral-700 px-2.5 py-1 text-xs text-neutral-200 hover:bg-neutral-800">+ Add card</button>
+                    </div>
+                    {form.assuranceCards.length === 0 && (
+                      <p className="text-xs text-neutral-500">No cards — the pair under the gallery will be hidden for this product.</p>
+                    )}
+                    {form.assuranceCards.map((card, i) => (
+                      <div key={i} className="rounded-xl border border-neutral-800 bg-neutral-950/60 p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="w-44 shrink-0 rounded-lg bg-neutral-950 border border-neutral-700 px-2 py-2 text-xs"
+                            value={card.icon}
+                            onChange={(e) => updateAssuranceCard(i, "icon", e.target.value)}
+                          >
+                            {ICON_OPTIONS.map((opt) => (
+                              <option key={opt.key} value={opt.key}>{opt.emoji} {opt.label}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => removeAssuranceCard(i)} className="ml-auto rounded-lg border border-neutral-700 px-2 py-2 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-red-300" aria-label="Remove card">✕</button>
+                        </div>
+                        <input
+                          className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs"
+                          value={card.eyebrow}
+                          onChange={(e) => updateAssuranceCard(i, "eyebrow", e.target.value)}
+                          placeholder="Eyebrow (e.g. Crafted Finish)"
+                        />
+                        <input
+                          className="w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs"
+                          value={card.title}
+                          onChange={(e) => updateAssuranceCard(i, "title", e.target.value)}
+                          placeholder="Title (e.g. 18K Gold-Tone Plating)"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ================= Same-day dispatch timer ================= */}
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 px-4 py-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Same-day dispatch timer</p>
+                    <p className="text-xs text-neutral-400">
+                      The "order within …" countdown in the buy-box. Turn it off to hide the countdown and show a plain "Ready to Ship" badge instead.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={form.dispatchTimer.enabled} onChange={(e) => updateDispatchTimer("enabled", e.target.checked)} />
+                    Show the countdown timer
+                  </label>
+                  {form.dispatchTimer.enabled && (
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div>
+                        <label className="text-xs text-neutral-300">Cut-off hour (0–23)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={23}
+                          className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs"
+                          value={form.dispatchTimer.cutoffHour}
+                          onChange={(e) => updateDispatchTimer("cutoffHour", Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : 0)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-neutral-300">Cut-off minute (0–59)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={59}
+                          className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs"
+                          value={form.dispatchTimer.cutoffMinute}
+                          onChange={(e) => updateDispatchTimer("cutoffMinute", Number.isFinite(e.target.valueAsNumber) ? e.target.valueAsNumber : 0)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-neutral-300">Label</label>
+                        <input
+                          className="mt-1 w-full rounded-lg bg-neutral-950 border border-neutral-700 px-3 py-2 text-xs"
+                          value={form.dispatchTimer.label}
+                          onChange={(e) => updateDispatchTimer("label", e.target.value)}
+                          placeholder="for same-day dispatch"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-neutral-500">Tip: a 17:00 (5 PM) cut-off is common — orders placed before then dispatch the same day.</p>
                 </div>
       
       

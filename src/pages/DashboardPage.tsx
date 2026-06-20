@@ -353,7 +353,7 @@ function StatCard({
           </p>
           <span className="text-base sm:text-lg opacity-60">{icon}</span>
         </div>
-        <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{value.toLocaleString()}</p>
+        <p className="mt-2 text-2xl sm:text-3xl font-bold text-neutral-100">{value.toLocaleString()}</p>
         {helper && (
           <p className="mt-1.5 text-[10px] sm:text-xs text-neutral-400 leading-snug">
             {helper}
