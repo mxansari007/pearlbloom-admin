@@ -6,6 +6,7 @@ import { logger } from "firebase-functions";
 /**
  * Configure Cloudinary from env variables injected by Secrets Manager.
  * Expected env names: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+ * Secret rebind: rotated to new Cloudinary API key (2026-06-21).
  */
 export function configureCloudinary() {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
