@@ -24,7 +24,7 @@ service cloud.firestore {
     // Admin email allowlist (lock-out-safe fallback until the custom `admin`
     // claim is provisioned). Compared lower-cased — keep entries lower-case.
     function adminEmails() {
-      return ['mxansari007@gmail.com'];
+      return ['mxansari007@gmail.com', 'ayazsqlane@gmail.com'];
     }
 
     function isSignedIn() {
