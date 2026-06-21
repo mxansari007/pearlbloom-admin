@@ -89,6 +89,7 @@ type ProductForm = {
   occasion: string[];
   collectionId: string;
   isFeatured: boolean;
+  isNewArrival: boolean;
   thumbnailUrl: string;
   images: string[];
   marketplaces: Marketplaces;
@@ -170,6 +171,7 @@ const emptyForm: ProductForm = {
   occasion: [],
   collectionId: "",
   isFeatured: false,
+  isNewArrival: false,
   thumbnailUrl: "",
   images: [],
   marketplaces: {
@@ -442,6 +444,7 @@ export default function ProductEditPage() {
             occasion: Array.isArray(data.occasion) ? data.occasion : [],
             collectionId: data.collectionId ?? "",
             isFeatured: data.isFeatured ?? false,
+            isNewArrival: data.isNewArrival ?? false,
             thumbnailUrl: data.thumbnailUrl ?? "",
             images: Array.isArray(data.images) ? data.images : [],
             marketplaces: {
@@ -860,6 +863,7 @@ export default function ProductEditPage() {
           occasion: form.occasion,
           collectionId: form.collectionId,
           isFeatured: form.isFeatured,
+          isNewArrival: form.isNewArrival,
           thumbnailUrl: form.thumbnailUrl,
           images: form.images ?? [],
           imagesMeta: imagesMeta,
@@ -1114,6 +1118,10 @@ export default function ProductEditPage() {
                   <label className="flex items-end space-x-2 text-sm">
                     <input type="checkbox" checked={form.isFeatured} onChange={(e) => handleChange("isFeatured", e.target.checked)} />
                     <span>Featured on homepage</span>
+                  </label>
+                  <label className="flex items-end space-x-2 text-sm">
+                    <input type="checkbox" checked={form.isNewArrival} onChange={(e) => handleChange("isNewArrival", e.target.checked)} />
+                    <span>Show in New Arrivals</span>
                   </label>
                 </div>
       
