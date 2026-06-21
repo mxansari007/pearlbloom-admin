@@ -664,6 +664,37 @@ export default function ProductEditPage() {
     }
   };
 
+  const removeThumbnail = async () => {
+    setError(null);
+    const url = form.thumbnailUrl;
+    if (!url) return;
+    setForm((prev) => ({ ...prev, thumbnailUrl: "" }));
+
+    const publicId = imagesMeta[url];
+    if (!publicId) {
+      // No tracked Cloudinary id (older/legacy thumbnail) — just unlink it.
+      setImagesMeta((m) => {
+        const copy = { ...m };
+        delete copy[url];
+        return copy;
+      });
+      return;
+    }
+
+    try {
+      await deleteImageViaCallable(publicId);
+      setImagesMeta((m) => {
+        const copy = { ...m };
+        delete copy[url];
+        return copy;
+      });
+    } catch (err: any) {
+      console.error("Delete failed", err);
+      setError(err.message || "Failed to delete image on server.");
+      setForm((prev) => ({ ...prev, thumbnailUrl: url })); // restore on failure
+    }
+  };
+
   const addAttribute = () => {
     setForm((prev) => ({ ...prev, attributes: [...prev.attributes, { key: "", value: "" }] }));
   };
@@ -1314,7 +1345,25 @@ export default function ProductEditPage() {
                   {uploadingThumbnail && <p className="mt-2 text-xs text-neutral-400">Uploading thumbnail…</p>}
                   {form.thumbnailUrl && (
                     <>
-                      <img src={form.thumbnailUrl} alt={imageAlt[form.thumbnailUrl] || "Thumbnail"} className="mt-2 h-32 rounded-lg object-cover" />
+                      <div className="relative mt-2 inline-block">
+                        <img src={form.thumbnailUrl} alt={imageAlt[form.thumbnailUrl] || "Thumbnail"} className="h-32 rounded-lg object-cover" />
+                        <button
+                          type="button"
+                          onClick={removeThumbnail}
+                          aria-label="Remove thumbnail image"
+                          title="Remove image"
+                          className="absolute -top-2 -right-2 z-10 h-6 w-6 rounded-full bg-black/80 text-xs text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeThumbnail}
+                        className="mt-2 block text-xs font-medium text-red-500 hover:text-red-400 transition-colors"
+                      >
+                        Remove image
+                      </button>
                       <input
                         className="mt-2 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-xs"
                         placeholder="Alt text — describe this image"
