@@ -26,6 +26,23 @@ type HeroImage = {
   public_id: string;
 };
 
+type OccasionMedia = {
+  url?: string;
+  public_id?: string;
+  alt?: string;
+};
+
+/* Fixed "Shop by Occasion" cards on the homepage (slugs must match the
+   storefront component). */
+const HOME_OCCASIONS: { slug: string; label: string }[] = [
+  { slug: "daily-wear", label: "Daily Wear" },
+  { slug: "office-wear", label: "Office Wear" },
+  { slug: "party-wear", label: "Party Wear" },
+  { slug: "festive-wear", label: "Festive Wear" },
+  { slug: "gift", label: "Gift Guide" },
+  { slug: "set", label: "Earring Set Bundles" },
+];
+
 type SettingsForm = {
   siteName: string;
   testMode: boolean;
@@ -36,6 +53,12 @@ type SettingsForm = {
   heroCtaLabel: string;
   heroCtaLink: string;
   heroImage?: HeroImage;
+  heroImageDark?: HeroImage;
+  heroFeaturedLabel: string;
+  heroFeaturedName: string;
+
+  // Homepage "Shop by Occasion" card images + alt (keyed by slug)
+  homeOccasions: Record<string, OccasionMedia>;
 
   // Footer
   footerBrandTitle: string;
@@ -73,6 +96,10 @@ const emptySettings: SettingsForm = {
   heroCtaLabel: "Explore Collection",
   heroCtaLink: "/collections/featured",
   heroImage: undefined,
+  heroImageDark: undefined,
+  heroFeaturedLabel: "Featured Earring",
+  heroFeaturedName: "",
+  homeOccasions: {},
 
   footerBrandTitle: "Pearl Bloom",
   footerBrandDescription: "",
@@ -129,6 +156,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingHero, setUploadingHero] = useState(false);
+  const [uploadingHeroDark, setUploadingHeroDark] = useState(false);
+  const [uploadingOccasion, setUploadingOccasion] = useState<string | null>(null);
 
   const functions = getFunctions(undefined, "us-central1");
   const uploadImage = httpsCallable(functions, "uploadImageCallable");
@@ -171,6 +200,10 @@ export default function SettingsPage() {
           heroCtaLabel: data.hero?.ctaLabel ?? "Explore Collection",
           heroCtaLink: data.hero?.ctaLink ?? "/collections/featured",
           heroImage: data.hero?.heroImage ?? undefined,
+          heroImageDark: data.hero?.heroImageDark ?? undefined,
+          heroFeaturedLabel: data.hero?.featuredLabel ?? "Featured Earring",
+          heroFeaturedName: data.hero?.featuredName ?? "",
+          homeOccasions: data.home?.occasions ?? {},
 
           footerBrandTitle: data.footer?.brandTitle ?? "Pearl Bloom",
           footerBrandDescription: data.footer?.brandDescription ?? "",
@@ -227,19 +260,22 @@ export default function SettingsPage() {
 
   /* ---------------- Hero upload (Callable) ---------------- */
 
-  const handleHeroImageUpload = async (
-    e: React.ChangeEvent<HTMLInputElement>
+  const handleHeroUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: "heroImage" | "heroImageDark"
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadingHero(true);
+    const setBusy = field === "heroImage" ? setUploadingHero : setUploadingHeroDark;
+    setBusy(true);
 
     try {
       const base64 = await fileToBase64(file);
 
-      if (form.heroImage?.public_id) {
-        await deleteImage({ public_id: form.heroImage.public_id });
+      const existing = form[field];
+      if (existing?.public_id) {
+        await deleteImage({ public_id: existing.public_id });
       }
 
       const res: any = await uploadImage({
@@ -250,7 +286,7 @@ export default function SettingsPage() {
 
       setForm((prev) => ({
         ...prev,
-        heroImage: {
+        [field]: {
           url: res.data.url,
           public_id: res.data.public_id,
         },
@@ -259,7 +295,101 @@ export default function SettingsPage() {
       console.error(err);
       alert("Hero image upload failed");
     } finally {
-      setUploadingHero(false);
+      setBusy(false);
+    }
+    // allow re-selecting the same file later
+    e.target.value = "";
+  };
+
+  const removeHeroImage = async (field: "heroImage" | "heroImageDark") => {
+    const existing = form[field];
+    // optimistic clear; restore on failure
+    setForm((prev) => ({ ...prev, [field]: undefined }));
+    try {
+      if (existing?.public_id) {
+        await deleteImage({ public_id: existing.public_id });
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Could not delete the image from storage; restoring it.");
+      setForm((prev) => ({ ...prev, [field]: existing }));
+    }
+  };
+
+  /* ---------------- "Shop by Occasion" image helpers ---------------- */
+
+  const handleOccasionUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    slug: string
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingOccasion(slug);
+    try {
+      const base64 = await fileToBase64(file);
+
+      const existing = form.homeOccasions[slug];
+      if (existing?.public_id) {
+        await deleteImage({ public_id: existing.public_id });
+      }
+
+      const res: any = await uploadImage({
+        base64,
+        filename: file.name,
+        folder: "home/occasions",
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        homeOccasions: {
+          ...prev.homeOccasions,
+          [slug]: {
+            ...prev.homeOccasions[slug],
+            url: res.data.url,
+            public_id: res.data.public_id,
+          },
+        },
+      }));
+    } catch (err) {
+      console.error(err);
+      alert("Image upload failed");
+    } finally {
+      setUploadingOccasion(null);
+    }
+    e.target.value = "";
+  };
+
+  const updateOccasionAlt = (slug: string, alt: string) => {
+    setForm((prev) => ({
+      ...prev,
+      homeOccasions: {
+        ...prev.homeOccasions,
+        [slug]: { ...prev.homeOccasions[slug], alt },
+      },
+    }));
+  };
+
+  const removeOccasionImage = async (slug: string) => {
+    const existing = form.homeOccasions[slug];
+    setForm((prev) => ({
+      ...prev,
+      homeOccasions: {
+        ...prev.homeOccasions,
+        [slug]: { ...prev.homeOccasions[slug], url: undefined, public_id: undefined },
+      },
+    }));
+    try {
+      if (existing?.public_id) {
+        await deleteImage({ public_id: existing.public_id });
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Could not delete the image from storage; restoring it.");
+      setForm((prev) => ({
+        ...prev,
+        homeOccasions: { ...prev.homeOccasions, [slug]: existing },
+      }));
     }
   };
 
@@ -351,6 +481,13 @@ export default function SettingsPage() {
           ctaLabel: form.heroCtaLabel,
           ctaLink: form.heroCtaLink,
           heroImage: form.heroImage,
+          heroImageDark: form.heroImageDark,
+          featuredLabel: form.heroFeaturedLabel,
+          featuredName: form.heroFeaturedName,
+        },
+
+        home: {
+          occasions: form.homeOccasions,
         },
 
         footer: {
@@ -516,34 +653,190 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-2 block">Hero Image</label>
-            <div className="flex items-start gap-4">
-              {form.heroImage?.url ? (
-                <img
-                  src={form.heroImage.url}
-                  alt="Hero"
-                  className="h-24 sm:h-32 rounded-xl object-cover border border-neutral-700"
-                />
-              ) : (
-                <div className="h-24 sm:h-32 w-32 sm:w-40 rounded-xl bg-neutral-800 flex items-center justify-center text-3xl border border-dashed border-neutral-600">
-                  🖼️
+            <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-2 block">Hero Images</label>
+            <p className="text-[10px] text-neutral-500 mb-3">
+              Upload a Light Mode image and (optionally) a Dark Mode image. The storefront smoothly
+              crossfades between them when a visitor toggles dark mode. If no dark image is set, the light one is used in both.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Light mode slot */}
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">☀️</span>
+                  <span className="text-xs font-medium text-neutral-200">Light Mode Image</span>
                 </div>
-              )}
-              <div>
-                <label className="inline-flex items-center gap-2 cursor-pointer bg-neutral-800 hover:bg-neutral-700 px-3 py-2 rounded-xl text-xs transition">
-                  <span>{form.heroImage?.url ? "Replace image" : "Choose file"}</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleHeroImageUpload}
+                {form.heroImage?.url ? (
+                  <img
+                    src={form.heroImage.url}
+                    alt="Hero light"
+                    className="w-full h-32 rounded-lg object-cover border border-neutral-700 bg-white"
                   />
-                </label>
+                ) : (
+                  <div className="w-full h-32 rounded-lg bg-neutral-800 flex items-center justify-center text-3xl border border-dashed border-neutral-600">
+                    🖼️
+                  </div>
+                )}
+                <div className="flex items-center gap-3 mt-2">
+                  <label className="inline-flex items-center gap-2 cursor-pointer bg-neutral-800 hover:bg-neutral-700 px-3 py-2 rounded-xl text-xs transition">
+                    <span>{form.heroImage?.url ? "Replace" : "Choose file"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleHeroUpload(e, "heroImage")}
+                    />
+                  </label>
+                  {form.heroImage?.url && (
+                    <button
+                      type="button"
+                      onClick={() => removeHeroImage("heroImage")}
+                      className="text-[11px] text-red-400 hover:text-red-300 transition"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
                 {uploadingHero && (
                   <p className="text-[10px] text-yellow-400 mt-2 animate-pulse">Uploading…</p>
                 )}
               </div>
+
+              {/* Dark mode slot */}
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🌙</span>
+                  <span className="text-xs font-medium text-neutral-200">Dark Mode Image</span>
+                </div>
+                {form.heroImageDark?.url ? (
+                  <img
+                    src={form.heroImageDark.url}
+                    alt="Hero dark"
+                    className="w-full h-32 rounded-lg object-cover border border-neutral-700 bg-neutral-950"
+                  />
+                ) : (
+                  <div className="w-full h-32 rounded-lg bg-neutral-800 flex items-center justify-center text-3xl border border-dashed border-neutral-600">
+                    🌙
+                  </div>
+                )}
+                <div className="flex items-center gap-3 mt-2">
+                  <label className="inline-flex items-center gap-2 cursor-pointer bg-neutral-800 hover:bg-neutral-700 px-3 py-2 rounded-xl text-xs transition">
+                    <span>{form.heroImageDark?.url ? "Replace" : "Choose file"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleHeroUpload(e, "heroImageDark")}
+                    />
+                  </label>
+                  {form.heroImageDark?.url && (
+                    <button
+                      type="button"
+                      onClick={() => removeHeroImage("heroImageDark")}
+                      className="text-[11px] text-red-400 hover:text-red-300 transition"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                {uploadingHeroDark && (
+                  <p className="text-[10px] text-yellow-400 mt-2 animate-pulse">Uploading…</p>
+                )}
+              </div>
             </div>
+
+            <p className="text-[10px] text-neutral-500 mt-3">
+              The caption below shows over your uploaded image(s). The default built-in image has its caption baked in.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Featured Label</label>
+              <input
+                placeholder="Featured Earring"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.heroFeaturedLabel}
+                onChange={(e) => handleChange("heroFeaturedLabel", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-neutral-400 uppercase tracking-wider mb-1.5 block">Featured Caption</label>
+              <input
+                placeholder="e.g. Riviera ridged Gold Hoops"
+                className="w-full rounded-xl bg-neutral-900/60 border border-neutral-700 px-3.5 py-2.5 text-sm focus:outline-none focus:border-yellow-500/50 transition"
+                value={form.heroFeaturedName}
+                onChange={(e) => handleChange("heroFeaturedName", e.target.value)}
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Homepage — Shop by Occasion */}
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/60 backdrop-blur-sm p-4 sm:p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🎀</span>
+            <h2 className="text-base sm:text-lg font-semibold">Homepage — Shop by Occasion</h2>
+          </div>
+          <p className="text-xs sm:text-sm text-neutral-400">
+            Image and alt text for each occasion card on the homepage. Leave an image empty to use the built-in default.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {HOME_OCCASIONS.map(({ slug, label }) => {
+              const item = form.homeOccasions[slug] ?? {};
+              return (
+                <div key={slug} className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-neutral-200">{label}</span>
+                    <span className="text-[10px] text-neutral-500">/{slug}</span>
+                  </div>
+
+                  {item.url ? (
+                    <img
+                      src={item.url}
+                      alt={item.alt || label}
+                      className="w-full h-28 rounded-lg object-cover border border-neutral-700"
+                    />
+                  ) : (
+                    <div className="w-full h-28 rounded-lg bg-neutral-800 flex items-center justify-center text-2xl border border-dashed border-neutral-600">
+                      🖼️
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="inline-flex items-center gap-2 cursor-pointer bg-neutral-800 hover:bg-neutral-700 px-3 py-2 rounded-xl text-xs transition">
+                      <span>{item.url ? "Replace" : "Choose file"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleOccasionUpload(e, slug)}
+                      />
+                    </label>
+                    {item.url && (
+                      <button
+                        type="button"
+                        onClick={() => removeOccasionImage(slug)}
+                        className="text-[11px] text-red-400 hover:text-red-300 transition"
+                      >
+                        Remove
+                      </button>
+                    )}
+                    {uploadingOccasion === slug && (
+                      <span className="text-[10px] text-yellow-400 animate-pulse">Uploading…</span>
+                    )}
+                  </div>
+
+                  <input
+                    placeholder={`Alt text (e.g. ${label} gold-plated earrings)`}
+                    className="w-full mt-2 rounded-lg bg-neutral-900/60 border border-neutral-700 px-3 py-2 text-xs focus:outline-none focus:border-yellow-500/50 transition"
+                    value={item.alt ?? ""}
+                    onChange={(e) => updateOccasionAlt(slug, e.target.value)}
+                  />
+                </div>
+              );
+            })}
           </div>
         </section>
 
