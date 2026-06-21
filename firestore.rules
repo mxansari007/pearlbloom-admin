@@ -27,8 +27,7 @@ service cloud.firestore {
       return [
         'mxansari007@gmail.com',
         'ayazsqlane@gmail.com',
-        'admin@pearlbloom.in',
-        'admin@pearbloom.in'
+        'admin@pearlbloom.in'
       ];
     }
 
