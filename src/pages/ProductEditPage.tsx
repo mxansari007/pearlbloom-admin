@@ -96,6 +96,9 @@ type ProductForm = {
   featureBadges: FeatureBadge[];
   assuranceCards: AssuranceCard[];
   dispatchTimer: DispatchTimer;
+  youtubeVideoUrl: string;
+  videoThumbnailImage: string;
+  videoThumbnailAltText: string;
   inventory?: Inventory;
   variants?: Variant[];
 };
@@ -182,6 +185,9 @@ const emptyForm: ProductForm = {
   featureBadges: cloneBadges(DEFAULT_FEATURE_BADGES),
   assuranceCards: cloneCards(DEFAULT_ASSURANCE_CARDS),
   dispatchTimer: { ...DEFAULT_DISPATCH_TIMER },
+  youtubeVideoUrl: "",
+  videoThumbnailImage: "",
+  videoThumbnailAltText: "",
   inventory: {
     trackStock: false,
     stock: 0,
@@ -336,6 +342,7 @@ export default function ProductEditPage() {
 
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const [uploadingGalleryMap, setUploadingGalleryMap] = useState<Record<string, boolean>>({});
+  const [uploadingVideoThumbnail, setUploadingVideoThumbnail] = useState(false);
   const [imagesMeta, setImagesMeta] = useState<Record<string, string>>({});
   // url -> alt text for every product image (SEO + accessibility)
   const [imageAlt, setImageAlt] = useState<Record<string, string>>({});
@@ -447,6 +454,9 @@ export default function ProductEditPage() {
             isNewArrival: data.isNewArrival ?? false,
             thumbnailUrl: data.thumbnailUrl ?? "",
             images: Array.isArray(data.images) ? data.images : [],
+            youtubeVideoUrl: data.youtubeVideoUrl ?? "",
+            videoThumbnailImage: data.videoThumbnailImage ?? "",
+            videoThumbnailAltText: data.videoThumbnailAltText ?? "",
             marketplaces: {
               amazon: data.marketplaces?.amazon ?? "",
               flipkart: data.marketplaces?.flipkart ?? "",
@@ -698,6 +708,62 @@ export default function ProductEditPage() {
     }
   };
 
+  const handleVideoThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setUploadingVideoThumbnail(true);
+
+    const localPreview = URL.createObjectURL(file);
+    setForm((prev) => ({ ...prev, videoThumbnailImage: localPreview }));
+
+    try {
+      const uploaded = await uploadFileViaCallable(file);
+      const url = uploaded?.url;
+      if (!url) throw new Error("No URL returned from upload");
+      setForm((prev) => ({ ...prev, videoThumbnailImage: url }));
+      const publicId = uploaded.public_id;
+      if (publicId) setImagesMeta((m) => ({ ...m, [url]: publicId }));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Video thumbnail upload failed.");
+      setForm((prev) => ({ ...prev, videoThumbnailImage: "" }));
+    } finally {
+      setUploadingVideoThumbnail(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const removeVideoThumbnail = async () => {
+    setError(null);
+    const url = form.videoThumbnailImage;
+    if (!url) return;
+    setForm((prev) => ({ ...prev, videoThumbnailImage: "" }));
+
+    const publicId = imagesMeta[url];
+    if (!publicId) {
+      setImagesMeta((m) => {
+        const copy = { ...m };
+        delete copy[url];
+        return copy;
+      });
+      return;
+    }
+
+    try {
+      await deleteImageViaCallable(publicId);
+      setImagesMeta((m) => {
+        const copy = { ...m };
+        delete copy[url];
+        return copy;
+      });
+    } catch (err: any) {
+      console.error("Delete failed", err);
+      setError(err.message || "Failed to delete video thumbnail on server.");
+      setForm((prev) => ({ ...prev, videoThumbnailImage: url }));
+    }
+  };
+
   const addAttribute = () => {
     setForm((prev) => ({ ...prev, attributes: [...prev.attributes, { key: "", value: "" }] }));
   };
@@ -868,6 +934,9 @@ export default function ProductEditPage() {
           images: form.images ?? [],
           imagesMeta: imagesMeta,
           imageAlt: imageAlt,
+          youtubeVideoUrl: form.youtubeVideoUrl,
+          videoThumbnailImage: form.videoThumbnailImage,
+          videoThumbnailAltText: form.videoThumbnailAltText,
           marketplaces: {
             amazon: form.marketplaces.amazon,
             flipkart: form.marketplaces.flipkart,
@@ -1416,6 +1485,70 @@ export default function ProductEditPage() {
                   )}
                 </div>
                   </div>
+
+                {/* Product Video subsection */}
+                <div className="space-y-4 pt-2">
+                  <div className="border-t border-neutral-800" />
+                  <h4 className="text-sm font-medium">Product Video</h4>
+                  <p className="text-xs text-neutral-400">Optionally add a product video from YouTube and a custom thumbnail.</p>
+
+                  {/* YouTube URL */}
+                  <div>
+                    <label className="text-xs text-neutral-300">YouTube video URL</label>
+                    <input
+                      className="mt-1 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-xs"
+                      value={form.youtubeVideoUrl}
+                      onChange={(e) => handleChange("youtubeVideoUrl", e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                    />
+                    {form.youtubeVideoUrl && !form.videoThumbnailImage && (
+                      <p className="mt-1 text-xs text-amber-400">Adding a video thumbnail image and alt text is recommended.</p>
+                    )}
+                  </div>
+
+                  {/* Video thumbnail image */}
+                  <div>
+                    <label className="text-sm">Video thumbnail image</label>
+                    <input className="mt-1 block text-sm" type="file" accept="image/*" onChange={handleVideoThumbnailChange} />
+                    {uploadingVideoThumbnail && <p className="mt-2 text-xs text-neutral-400">Uploading thumbnail…</p>}
+                    {form.videoThumbnailImage && (
+                      <>
+                        <div className="relative mt-2 inline-block">
+                          <img src={form.videoThumbnailImage} alt={form.videoThumbnailAltText || "Video thumbnail"} className="h-32 rounded-lg object-cover" />
+                          <button
+                            type="button"
+                            onClick={removeVideoThumbnail}
+                            aria-label="Remove video thumbnail image"
+                            title="Remove image"
+                            className="absolute -top-2 -right-2 z-10 h-6 w-6 rounded-full bg-black/80 text-xs text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={removeVideoThumbnail}
+                          className="mt-2 block text-xs font-medium text-red-500 hover:text-red-400 transition-colors"
+                        >
+                          Remove image
+                        </button>
+                      </>
+                    )}
+                    <p className="mt-1 text-xs text-neutral-500">Custom thumbnail for the video (not auto-generated).</p>
+                  </div>
+
+                  {/* Thumbnail alt text */}
+                  <div>
+                    <label className="text-xs text-neutral-300">Thumbnail alt text</label>
+                    <input
+                      className="mt-1 w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-xs"
+                      placeholder="Alt text for the video thumbnail"
+                      value={form.videoThumbnailAltText}
+                      onChange={(e) => handleChange("videoThumbnailAltText", e.target.value)}
+                    />
+                    <p className="mt-1 text-xs text-neutral-500">Accessibility text for the video thumbnail image.</p>
+                  </div>
+                </div>
                 </div>
                 {/* /Product Images card */}
 
