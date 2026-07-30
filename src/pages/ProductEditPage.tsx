@@ -935,7 +935,7 @@ export default function ProductEditPage() {
           imagesMeta: imagesMeta,
           imageAlt: imageAlt,
           youtubeVideoUrl: form.youtubeVideoUrl,
-          videoThumbnailImage: form.videoThumbnailImage,
+          videoThumbnailImage: form.videoThumbnailImage?.startsWith('blob:') ? '' : form.videoThumbnailImage,
           videoThumbnailAltText: form.videoThumbnailAltText,
           marketplaces: {
             amazon: form.marketplaces.amazon,
